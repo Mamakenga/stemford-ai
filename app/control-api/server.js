@@ -268,6 +268,36 @@ app.post("/approvals/decide", async (req, res) => {
 
 
 // Runtime bridge: claim task
+
+app.post("/tasks", async (req, res) => {
+  const { title, primary_goal_id, assignee, due_at, actor_role } = req.body || {};
+
+  if (!title || !primary_goal_id || !assignee || !actor_role) {
+    return fail(res, 400, "validation_error", "title, primary_goal_id, assignee, actor_role are required");
+  }
+
+  try {
+    const taskId = id("tg");
+    const q = await pool.query(
+      `insert into tasks (id,title,primary_goal_id,status,assignee,due_at)
+       values ($1,$2,$3,'todo',$4,$5)
+       returning id,title,primary_goal_id,status,assignee,due_at`,
+      [taskId, title, primary_goal_id, assignee, due_at || null]
+    );
+
+    const row = q.rows[0];
+    await writeAction("task_created", "task", row.id, actor_role, {
+      title: row.title,
+      goal_id: row.primary_goal_id,
+      assignee: row.assignee
+    });
+
+    return ok(res, row);
+  } catch (e) {
+    return fail(res, 500, "task_create_failed", e.message);
+  }
+});
+
 app.post("/tasks/:id/claim", async (req, res) => {
   const taskId = req.params.id;
   const actor_role = String(req.body?.actor_role || "").trim();

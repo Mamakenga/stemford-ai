@@ -122,25 +122,34 @@ bot.onText(/^\/yes$/, async (msg) => {
   const draft = pendingTaskDrafts.get(msg.chat.id);
   if (!draft) return bot.sendMessage(msg.chat.id, "Нет черновика для подтверждения.");
 
-  const id = `tg_${Date.now()}`;
   try {
-    await pool.query(
-      `
-      insert into tasks (id,title,primary_goal_id,status,assignee)
-      values ($1,$2,$3,'todo',$4)
-      `,
-      [id, draft.title, draft.goalId, draft.assignee]
-    );
+    const resp = await fetch("http://127.0.0.1:3210/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: draft.title,
+        primary_goal_id: draft.goalId,
+        assignee: draft.assignee,
+        actor_role: "human_telegram"
+      }),
+    });
+
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok || !data || !data.ok) {
+      const msgText = data && data.error && data.error.message ? data.error.message : "HTTP " + resp.status;
+      return bot.sendMessage(msg.chat.id, "Task create error: " + msgText);
+    }
 
     pendingTaskDrafts.delete(msg.chat.id);
     await bot.sendMessage(
       msg.chat.id,
-      `Задача создана: ${id}\nassignee: ${draft.assignee}\ngoal: ${draft.goalId}`
+      "Задача создана: " + data.data.id + "\nassignee: " + draft.assignee + "\ngoal: " + draft.goalId
     );
   } catch (e) {
-    await bot.sendMessage(msg.chat.id, `Task create error: ${e.message}`);
+    await bot.sendMessage(msg.chat.id, "Task create error: " + e.message);
   }
 });
+
 
 bot.onText(/^\/no$/, async (msg) => {
   if (!isAllowedMessage(msg)) return;
