@@ -38,6 +38,30 @@ function isAllowedMessage(msg) {
   return !!(msg && msg.chat && allowedChatIds.has(Number(msg.chat.id)));
 }
 const pendingTaskDrafts = new Map();
+const TASK_DRAFT_TTL_MS = 5 * 60 * 1000;
+
+function setTaskDraft(chatId, draft) {
+  pendingTaskDrafts.set(chatId, { ...draft, createdAt: Date.now() });
+}
+
+function getTaskDraft(chatId) {
+  const draft = pendingTaskDrafts.get(chatId);
+  if (!draft) return null;
+  if (Date.now() - draft.createdAt > TASK_DRAFT_TTL_MS) {
+    pendingTaskDrafts.delete(chatId);
+    return null;
+  }
+  return draft;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [chatId, draft] of pendingTaskDrafts.entries()) {
+    if (!draft || now - draft.createdAt > TASK_DRAFT_TTL_MS) {
+      pendingTaskDrafts.delete(chatId);
+    }
+  }
+}, 60 * 1000).unref();
 
 function inferRouting(title) {
   const t = (title || "").toLowerCase();
@@ -104,7 +128,7 @@ bot.onText(/^\/task\s+(.+)/, async (msg, m) => {
   if (!title) return bot.sendMessage(msg.chat.id, "Формат: /task <текст задачи>");
 
   const route = inferRouting(title);
-  pendingTaskDrafts.set(msg.chat.id, {
+  setTaskDraft(msg.chat.id, {
     title,
     assignee: route.assignee,
     goalId: route.goalId,
@@ -122,8 +146,8 @@ bot.onText(/^\/task\s+(.+)/, async (msg, m) => {
 
 bot.onText(/^\/yes$/, async (msg) => {
   if (!isAllowedMessage(msg)) return;
-  const draft = pendingTaskDrafts.get(msg.chat.id);
-  if (!draft) return bot.sendMessage(msg.chat.id, "Нет черновика для подтверждения.");
+  const draft = getTaskDraft(msg.chat.id);
+  if (!draft) return bot.sendMessage(msg.chat.id, "Нет черновика или он устарел. Создайте заново через /task.");
 
   try {
     const resp = await fetch("http://127.0.0.1:3210/tasks", {
