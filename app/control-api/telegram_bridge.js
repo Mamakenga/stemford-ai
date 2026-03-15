@@ -235,19 +235,26 @@ bot.onText(/^\/approve\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
   if (!approvalId) return bot.sendMessage(msg.chat.id, "Формат: /approve <approval_id>");
 
   try {
-    const q = await pool.query(
-      `
-      update approval_requests
-      set status='approved', decided_by_role='strategy', reason='approved from telegram', decided_at=now()
-      where approval_id=$1 and approver_role='strategy' and status='pending'
-      returning approval_id
-      `,
-      [approvalId]
-    );
-    if (!q.rows.length) return bot.sendMessage(msg.chat.id, `Не найден pending approval: ${approvalId}`);
-    await bot.sendMessage(msg.chat.id, `Approved: ${q.rows[0].approval_id}`);
+    const resp = await fetch("http://127.0.0.1:3210/approvals/decide", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        approval_id: approvalId,
+        decision: "approved",
+        decided_by_role: "strategy",
+        reason: "approved from telegram"
+      }),
+    });
+
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok || !data || !data.ok) {
+      const msgText = data && data.error && data.error.message ? data.error.message : "HTTP " + resp.status;
+      return bot.sendMessage(msg.chat.id, "Approve error: " + msgText);
+    }
+
+    await bot.sendMessage(msg.chat.id, "Approved: " + approvalId);
   } catch (e) {
-    await bot.sendMessage(msg.chat.id, `Approve error: ${e.message}`);
+    await bot.sendMessage(msg.chat.id, "Approve error: " + e.message);
   }
 });
 
@@ -258,19 +265,26 @@ bot.onText(/^\/reject\s+([A-Za-z0-9_-]+)(?:\s+(.+))?$/, async (msg, m) => {
   if (!approvalId) return bot.sendMessage(msg.chat.id, "Формат: /reject <approval_id> [причина]");
 
   try {
-    const q = await pool.query(
-      `
-      update approval_requests
-      set status='rejected', decided_by_role='strategy', reason=$2, decided_at=now()
-      where approval_id=$1 and approver_role='strategy' and status='pending'
-      returning approval_id
-      `,
-      [approvalId, reason]
-    );
-    if (!q.rows.length) return bot.sendMessage(msg.chat.id, `Не найден pending approval: ${approvalId}`);
-    await bot.sendMessage(msg.chat.id, `Rejected: ${q.rows[0].approval_id}`);
+    const resp = await fetch("http://127.0.0.1:3210/approvals/decide", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        approval_id: approvalId,
+        decision: "rejected",
+        decided_by_role: "strategy",
+        reason
+      }),
+    });
+
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok || !data || !data.ok) {
+      const msgText = data && data.error && data.error.message ? data.error.message : "HTTP " + resp.status;
+      return bot.sendMessage(msg.chat.id, "Reject error: " + msgText);
+    }
+
+    await bot.sendMessage(msg.chat.id, "Rejected: " + approvalId);
   } catch (e) {
-    await bot.sendMessage(msg.chat.id, `Reject error: ${e.message}`);
+    await bot.sendMessage(msg.chat.id, "Reject error: " + e.message);
   }
 });
 
