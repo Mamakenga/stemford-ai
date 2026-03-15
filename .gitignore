@@ -1,0 +1,14 @@
+# Secrets / runtime
+run/.env
+run/*.env
+logs/
+data/
+backups/
+*.log
+
+# Node deps
+app/control-api/node_modules/
+
+# OS junk
+.DS_Store
+Thumbs.db
