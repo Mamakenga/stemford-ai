@@ -348,6 +348,60 @@ app.post("/tasks/:id/complete", async (req, res) => {
   }
 });
 
+app.post("/tasks/:id/block", async (req, res) => {
+  const taskId = req.params.id;
+  const { actor_role, reason } = req.body || {};
+  if (!actor_role) {
+    return fail(res, 400, "validation_error", "actor_role is required");
+  }
+  try {
+    const q = await pool.query(
+      `update tasks
+         set status='blocked',
+             status_reason=$2
+       where id=$1
+         and status in ('todo','in_progress')
+       returning id,title,status,assignee,primary_goal_id,status_reason`,
+      [taskId, reason || null]
+    );
+    if (q.rowCount === 0) {
+      return fail(res, 409, "invalid_transition_or_not_found", "task not found or status transition is not allowed");
+    }
+    const row = q.rows[0];
+    await writeAction("task_blocked", "task", row.id, actor_role, { reason: row.status_reason });
+    return ok(res, row);
+  } catch (e) {
+    return fail(res, 500, "task_block_failed", e.message);
+  }
+});
+
+app.post("/tasks/:id/fail", async (req, res) => {
+  const taskId = req.params.id;
+  const { actor_role, reason } = req.body || {};
+  if (!actor_role) {
+    return fail(res, 400, "validation_error", "actor_role is required");
+  }
+  try {
+    const q = await pool.query(
+      `update tasks
+         set status='failed',
+             status_reason=$2
+       where id=$1
+         and status in ('todo','in_progress')
+       returning id,title,status,assignee,primary_goal_id,status_reason`,
+      [taskId, reason || null]
+    );
+    if (q.rowCount === 0) {
+      return fail(res, 409, "invalid_transition_or_not_found", "task not found or status transition is not allowed");
+    }
+    const row = q.rows[0];
+    await writeAction("task_failed", "task", row.id, actor_role, { reason: row.status_reason });
+    return ok(res, row);
+  } catch (e) {
+    return fail(res, 500, "task_fail_failed", e.message);
+  }
+});
+
 app.listen(PORT, "127.0.0.1", () => {
   console.log(`stemford-control-api listening on 127.0.0.1:${PORT}`);
 });
