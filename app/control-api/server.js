@@ -465,6 +465,31 @@ app.post("/tasks/:id/reopen", async (req, res) => {
   }
 });
 
-app.listen(PORT, "127.0.0.1", () => {
+const server = app.listen(PORT, "127.0.0.1", () => {
   console.log(`stemford-control-api listening on 127.0.0.1:${PORT}`);
 });
+
+let controlApiShuttingDown = false;
+async function shutdownControlApi(signal) {
+  if (controlApiShuttingDown) return;
+  controlApiShuttingDown = true;
+  console.log(`control-api shutdown: ${signal}`);
+
+  const forceTimer = setTimeout(() => {
+    console.error("control-api force exit after timeout");
+    process.exit(1);
+  }, 10000);
+  forceTimer.unref();
+
+  server.close(async () => {
+    try {
+      await pool.end();
+    } catch (e) {
+      console.error("control-api pool.end error:", e.message);
+    }
+    process.exit(0);
+  });
+}
+
+process.on("SIGTERM", () => { void shutdownControlApi("SIGTERM"); });
+process.on("SIGINT", () => { void shutdownControlApi("SIGINT"); });

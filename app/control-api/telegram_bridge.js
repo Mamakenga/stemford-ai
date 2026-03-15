@@ -541,3 +541,33 @@ bot.on("polling_error", (err) => {
 });
 
 console.log("stemford-telegram-bridge started");
+
+let bridgeShuttingDown = false;
+async function shutdownBridge(signal) {
+  if (bridgeShuttingDown) return;
+  bridgeShuttingDown = true;
+  console.log(`telegram-bridge shutdown: ${signal}`);
+
+  const forceTimer = setTimeout(() => {
+    console.error("telegram-bridge force exit after timeout");
+    process.exit(1);
+  }, 10000);
+  forceTimer.unref();
+
+  try {
+    await bot.stopPolling();
+  } catch (e) {
+    console.error("stopPolling error:", e.message);
+  }
+
+  try {
+    await pool.end();
+  } catch (e) {
+    console.error("bridge pool.end error:", e.message);
+  }
+
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => { void shutdownBridge("SIGTERM"); });
+process.on("SIGINT", () => { void shutdownBridge("SIGINT"); });
