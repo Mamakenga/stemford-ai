@@ -19,6 +19,7 @@ if (!dbUrl) {
 const pool = new Pool({
   connectionString: dbUrl,
   ssl: { rejectUnauthorized: false },
+  application_name: "human_telegram",
 });
 
 const bot = new TelegramBot(token, { polling: true });
@@ -376,8 +377,7 @@ bot.onText(/^\/run\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
   if (!taskId) return bot.sendMessage(msg.chat.id, "Формат: /run <task_id>");
 
   try {
-    const q = await pool.query(
-      `update tasks
+    const q = await pool.query(`update tasks
        set status='in_progress'
        where id=$1 and status in ('todo','blocked')
        returning id,status,assignee`,
@@ -396,8 +396,7 @@ bot.onText(/^\/done\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
   if (!taskId) return bot.sendMessage(msg.chat.id, "Формат: /done <task_id>");
 
   try {
-    const q = await pool.query(
-      `update tasks
+    const q = await pool.query(`update tasks
        set status='done'
        where id=$1 and status in ('todo','in_progress','blocked')
        returning id,status`,
@@ -417,8 +416,7 @@ bot.onText(/^\/block\s+([A-Za-z0-9_-]+)\s+(.+)$/, async (msg, m) => {
   if (!taskId || !reason) return bot.sendMessage(msg.chat.id, "Формат: /block <task_id> <причина>");
 
   try {
-    const q = await pool.query(
-      `update tasks
+    const q = await pool.query(`update tasks
        set status='blocked', status_reason=$2
        where id=$1 and status in ('todo','in_progress')
        returning id,status,status_reason`,
@@ -438,8 +436,7 @@ bot.onText(/^\/fail\s+([A-Za-z0-9_-]+)\s+(.+)$/, async (msg, m) => {
   if (!taskId || !reason) return bot.sendMessage(msg.chat.id, "Формат: /fail <task_id> <причина>");
 
   try {
-    const q = await pool.query(
-      `update tasks
+    const q = await pool.query(`update tasks
        set status='failed', status_reason=$2
        where id=$1 and status in ('todo','in_progress','blocked')
        returning id,status,status_reason`,
@@ -460,8 +457,7 @@ bot.onText(/^\/reopen\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
   if (!taskId) return bot.sendMessage(msg.chat.id, "Формат: /reopen <task_id>");
 
   try {
-    const q = await pool.query(
-      `update tasks
+    const q = await pool.query(`update tasks
        set status='todo'
        where id=$1 and status in ('done','failed','blocked')
        returning id,status`,
