@@ -22,6 +22,17 @@ const pool = new Pool({
 });
 
 const bot = new TelegramBot(token, { polling: true });
+
+const allowedChatIds = new Set(
+  (process.env.ALLOWED_CHAT_IDS || "")
+    .split(",")
+    .map((x) => Number(x.trim()))
+    .filter((x) => Number.isFinite(x))
+);
+
+function isAllowedMessage(msg) {
+  return !!(msg && msg.chat && allowedChatIds.has(Number(msg.chat.id)));
+}
 const pendingTaskDrafts = new Map();
 
 function inferRouting(title) {
@@ -62,14 +73,17 @@ const helpText =
   "Команды:\n/help\n/status\n/task <текст задачи>\n/yes (подтвердить черновик /task)\n/no (отмена черновика /task)\n/tasks [status]\n/approvals\n/approve <approval_id>\n/reject <approval_id> [причина]\n/org\n/goals\n/goal <goal_id>\n/run <task_id>\n/done <task_id>\n/block <task_id> <причина>\n/fail <task_id> <причина>\n/reopen <task_id>";
 
 bot.onText(/^\/start$/, async (msg) => {
+  if (!isAllowedMessage(msg)) return;
   await bot.sendMessage(msg.chat.id, "Stemford AI online.\n" + helpText);
 });
 
 bot.onText(/^\/help$/, async (msg) => {
+  if (!isAllowedMessage(msg)) return;
   await bot.sendMessage(msg.chat.id, helpText);
 });
 
 bot.onText(/^\/status$/, async (msg) => {
+  if (!isAllowedMessage(msg)) return;
   try {
     const q = await pool.query(
       "select count(*)::int as cnt from tasks where status in ('todo','in_progress','blocked')"
@@ -81,6 +95,7 @@ bot.onText(/^\/status$/, async (msg) => {
 });
 
 bot.onText(/^\/task\s+(.+)/, async (msg, m) => {
+  if (!isAllowedMessage(msg)) return;
   const title = (m && m[1] ? m[1] : "").trim();
   if (!title) return bot.sendMessage(msg.chat.id, "Формат: /task <текст задачи>");
 
@@ -102,6 +117,7 @@ bot.onText(/^\/task\s+(.+)/, async (msg, m) => {
 });
 
 bot.onText(/^\/yes$/, async (msg) => {
+  if (!isAllowedMessage(msg)) return;
   const draft = pendingTaskDrafts.get(msg.chat.id);
   if (!draft) return bot.sendMessage(msg.chat.id, "Нет черновика для подтверждения.");
 
@@ -126,6 +142,7 @@ bot.onText(/^\/yes$/, async (msg) => {
 });
 
 bot.onText(/^\/no$/, async (msg) => {
+  if (!isAllowedMessage(msg)) return;
   if (pendingTaskDrafts.has(msg.chat.id)) {
     pendingTaskDrafts.delete(msg.chat.id);
     return bot.sendMessage(msg.chat.id, "Черновик отменен.");
@@ -134,6 +151,7 @@ bot.onText(/^\/no$/, async (msg) => {
 });
 
 bot.onText(/^\/tasks(?:\s+(backlog|todo|in_progress|blocked|done|failed))?$/, async (msg, m) => {
+  if (!isAllowedMessage(msg)) return;
   const status = (m && m[1] ? m[1].trim() : null);
 
   try {
@@ -176,6 +194,7 @@ bot.onText(/^\/tasks(?:\s+(backlog|todo|in_progress|blocked|done|failed))?$/, as
 });
 
 bot.onText(/^\/approvals$/, async (msg) => {
+  if (!isAllowedMessage(msg)) return;
   try {
     const q = await pool.query(
       `
@@ -201,6 +220,7 @@ bot.onText(/^\/approvals$/, async (msg) => {
 });
 
 bot.onText(/^\/approve\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
+  if (!isAllowedMessage(msg)) return;
   const approvalId = m && m[1] ? m[1].trim() : "";
   if (!approvalId) return bot.sendMessage(msg.chat.id, "Формат: /approve <approval_id>");
 
@@ -222,6 +242,7 @@ bot.onText(/^\/approve\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
 });
 
 bot.onText(/^\/reject\s+([A-Za-z0-9_-]+)(?:\s+(.+))?$/, async (msg, m) => {
+  if (!isAllowedMessage(msg)) return;
   const approvalId = m && m[1] ? m[1].trim() : "";
   const reason = (m && m[2] ? m[2].trim() : "rejected from telegram");
   if (!approvalId) return bot.sendMessage(msg.chat.id, "Формат: /reject <approval_id> [причина]");
@@ -244,6 +265,7 @@ bot.onText(/^\/reject\s+([A-Za-z0-9_-]+)(?:\s+(.+))?$/, async (msg, m) => {
 });
 
 bot.onText(/^\/org$/, async (msg) => {
+  if (!isAllowedMessage(msg)) return;
   try {
     const rolesQ = await pool.query(
       `select role_id, title from roles where status='active' order by role_id`
@@ -282,6 +304,7 @@ bot.onText(/^\/org$/, async (msg) => {
 });
 
 bot.onText(/^\/goals$/, async (msg) => {
+  if (!isAllowedMessage(msg)) return;
   try {
     const q = await pool.query(
       `
@@ -309,6 +332,7 @@ bot.onText(/^\/goals$/, async (msg) => {
 });
 
 bot.onText(/^\/goal\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
+  if (!isAllowedMessage(msg)) return;
   const goalId = m && m[1] ? m[1].trim() : "";
   if (!goalId) return bot.sendMessage(msg.chat.id, "Формат: /goal <goal_id>");
 
@@ -347,6 +371,7 @@ bot.onText(/^\/goal\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
 
 
 bot.onText(/^\/run\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
+  if (!isAllowedMessage(msg)) return;
   const taskId = m && m[1] ? m[1].trim() : "";
   if (!taskId) return bot.sendMessage(msg.chat.id, "Формат: /run <task_id>");
 
@@ -366,6 +391,7 @@ bot.onText(/^\/run\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
 });
 
 bot.onText(/^\/done\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
+  if (!isAllowedMessage(msg)) return;
   const taskId = m && m[1] ? m[1].trim() : "";
   if (!taskId) return bot.sendMessage(msg.chat.id, "Формат: /done <task_id>");
 
@@ -385,6 +411,7 @@ bot.onText(/^\/done\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
 });
 
 bot.onText(/^\/block\s+([A-Za-z0-9_-]+)\s+(.+)$/, async (msg, m) => {
+  if (!isAllowedMessage(msg)) return;
   const taskId = m && m[1] ? m[1].trim() : "";
   const reason = m && m[2] ? m[2].trim() : "";
   if (!taskId || !reason) return bot.sendMessage(msg.chat.id, "Формат: /block <task_id> <причина>");
@@ -405,6 +432,7 @@ bot.onText(/^\/block\s+([A-Za-z0-9_-]+)\s+(.+)$/, async (msg, m) => {
 });
 
 bot.onText(/^\/fail\s+([A-Za-z0-9_-]+)\s+(.+)$/, async (msg, m) => {
+  if (!isAllowedMessage(msg)) return;
   const taskId = m && m[1] ? m[1].trim() : "";
   const reason = m && m[2] ? m[2].trim() : "";
   if (!taskId || !reason) return bot.sendMessage(msg.chat.id, "Формат: /fail <task_id> <причина>");
@@ -427,6 +455,7 @@ bot.onText(/^\/fail\s+([A-Za-z0-9_-]+)\s+(.+)$/, async (msg, m) => {
 
 
 bot.onText(/^\/reopen\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
+  if (!isAllowedMessage(msg)) return;
   const taskId = m && m[1] ? m[1].trim() : "";
   if (!taskId) return bot.sendMessage(msg.chat.id, "Формат: /reopen <task_id>");
 
