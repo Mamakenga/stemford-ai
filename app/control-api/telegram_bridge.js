@@ -206,36 +206,35 @@ bot.onText(/^\/tasks(?:\s+(backlog|todo|in_progress|blocked|done|failed))?$/, as
   }
 });
 
-bot.onText(/^\/approvals$/, async (msg) => {
+bot.onText(/^\/approvals(?:\s+(strategy|finance|pmo|orchestrator))?$/, async (msg, m) => {
   if (!isAllowedMessage(msg)) return;
+  const approverRole = m && m[1] ? m[1].trim() : "strategy";
   try {
     const q = await pool.query(
-      `
-      select approval_id, action_class, entity_type, entity_id, requested_by_role, created_at
-      from approval_requests
-      where approver_role = 'strategy' and status = 'pending'
-      order by created_at asc
-      limit 10
-      `
+      "select approval_id, action_class, entity_type, entity_id, requested_by_role, created_at " +
+      "from approval_requests where approver_role = $1 and status = 'pending' " +
+      "order by created_at asc limit 10",
+      [approverRole]
     );
 
     if (!q.rows.length) return bot.sendMessage(msg.chat.id, "Pending approvals: 0");
 
     const lines = q.rows.map((r, i) => {
       const dt = new Date(r.created_at).toISOString().replace("T", " ").slice(0, 16);
-      return `${i + 1}. ${r.approval_id}\n${r.action_class} | ${r.entity_type}:${r.entity_id}\nby ${r.requested_by_role} at ${dt}`;
+      return (i + 1) + ". " + r.approval_id + "\n" + r.action_class + " | " + r.entity_type + ":" + r.entity_id + "\nby " + r.requested_by_role + " at " + dt;
     });
 
-    await bot.sendMessage(msg.chat.id, `Pending approvals (${q.rows.length}):\n\n${lines.join("\n\n")}`);
+    await bot.sendMessage(msg.chat.id, "Pending approvals (" + q.rows.length + ") for " + approverRole + ":\n\n" + lines.join("\n\n"));
   } catch (e) {
-    await bot.sendMessage(msg.chat.id, `Approvals error: ${e.message}`);
+    await bot.sendMessage(msg.chat.id, "Approvals error: " + e.message);
   }
 });
 
-bot.onText(/^\/approve\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
+bot.onText(/^\/approve\s+([A-Za-z0-9_-]+)(?:\s+--role=(strategy|finance|pmo|orchestrator))?$/, async (msg, m) => {
   if (!isAllowedMessage(msg)) return;
   const approvalId = m && m[1] ? m[1].trim() : "";
-  if (!approvalId) return bot.sendMessage(msg.chat.id, "Формат: /approve <approval_id>");
+  const decidedByRole = m && m[2] ? m[2].trim() : "strategy";
+  if (!approvalId) return bot.sendMessage(msg.chat.id, "Формат: /approve <approval_id> [--role=strategy|finance|pmo|orchestrator]");
 
   try {
     const resp = await fetch("http://127.0.0.1:3210/approvals/decide", {
@@ -244,7 +243,7 @@ bot.onText(/^\/approve\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
       body: JSON.stringify({
         approval_id: approvalId,
         decision: "approved",
-        decided_by_role: "strategy",
+        decided_by_role: decidedByRole,
         reason: "approved from telegram"
       }),
     });
@@ -255,7 +254,7 @@ bot.onText(/^\/approve\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
       return bot.sendMessage(msg.chat.id, "Approve error: " + msgText);
     }
 
-    await bot.sendMessage(msg.chat.id, "Approved: " + approvalId);
+    await bot.sendMessage(msg.chat.id, "Approved: " + approvalId + " (role: " + decidedByRole + ")");
   } catch (e) {
     await bot.sendMessage(msg.chat.id, "Approve error: " + e.message);
   }
@@ -264,8 +263,17 @@ bot.onText(/^\/approve\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
 bot.onText(/^\/reject\s+([A-Za-z0-9_-]+)(?:\s+(.+))?$/, async (msg, m) => {
   if (!isAllowedMessage(msg)) return;
   const approvalId = m && m[1] ? m[1].trim() : "";
-  const reason = (m && m[2] ? m[2].trim() : "rejected from telegram");
-  if (!approvalId) return bot.sendMessage(msg.chat.id, "Формат: /reject <approval_id> [причина]");
+  let reasonRaw = m && m[2] ? m[2].trim() : "";
+  let decidedByRole = "strategy";
+
+  const roleMatch = reasonRaw.match(/\s--role=(strategy|finance|pmo|orchestrator)\s*$/);
+  if (roleMatch) {
+    decidedByRole = roleMatch[1];
+    reasonRaw = reasonRaw.replace(/\s--role=(strategy|finance|pmo|orchestrator)\s*$/, "").trim();
+  }
+
+  const reason = reasonRaw || "rejected from telegram";
+  if (!approvalId) return bot.sendMessage(msg.chat.id, "Формат: /reject <approval_id> [причина] [--role=strategy|finance|pmo|orchestrator]");
 
   try {
     const resp = await fetch("http://127.0.0.1:3210/approvals/decide", {
@@ -274,7 +282,7 @@ bot.onText(/^\/reject\s+([A-Za-z0-9_-]+)(?:\s+(.+))?$/, async (msg, m) => {
       body: JSON.stringify({
         approval_id: approvalId,
         decision: "rejected",
-        decided_by_role: "strategy",
+        decided_by_role: decidedByRole,
         reason
       }),
     });
@@ -285,11 +293,12 @@ bot.onText(/^\/reject\s+([A-Za-z0-9_-]+)(?:\s+(.+))?$/, async (msg, m) => {
       return bot.sendMessage(msg.chat.id, "Reject error: " + msgText);
     }
 
-    await bot.sendMessage(msg.chat.id, "Rejected: " + approvalId);
+    await bot.sendMessage(msg.chat.id, "Rejected: " + approvalId + " (role: " + decidedByRole + ")");
   } catch (e) {
     await bot.sendMessage(msg.chat.id, "Reject error: " + e.message);
   }
 });
+
 
 bot.onText(/^\/org$/, async (msg) => {
   if (!isAllowedMessage(msg)) return;
