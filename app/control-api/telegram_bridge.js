@@ -471,16 +471,24 @@ bot.onText(/^\/reopen\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
   if (!taskId) return bot.sendMessage(msg.chat.id, "Формат: /reopen <task_id>");
 
   try {
-    const q = await pool.query(`update tasks
-       set status='todo'
-       where id=$1 and status in ('done','failed','blocked')
-       returning id,status`,
-      [taskId]
+    const resp = await fetch(
+      "http://127.0.0.1:3210/tasks/" + encodeURIComponent(taskId) + "/reopen",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actor_role: "human_telegram" }),
+      }
     );
-    if (!q.rows.length) return bot.sendMessage(msg.chat.id, `Не удалось reopen: ${taskId}`);
-    await bot.sendMessage(msg.chat.id, `Task reopened: ${q.rows[0].id}`);
+
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok || !data || !data.ok) {
+      const msgText = data && data.error && data.error.message ? data.error.message : "HTTP " + resp.status;
+      return bot.sendMessage(msg.chat.id, "Reopen error: " + msgText);
+    }
+
+    await bot.sendMessage(msg.chat.id, "Task reopened: " + taskId);
   } catch (e) {
-    await bot.sendMessage(msg.chat.id, `Reopen error: ${e.message}`);
+    await bot.sendMessage(msg.chat.id, "Reopen error: " + e.message);
   }
 });
 

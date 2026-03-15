@@ -402,6 +402,36 @@ app.post("/tasks/:id/fail", async (req, res) => {
   }
 });
 
+app.post("/tasks/:id/reopen", async (req, res) => {
+  const taskId = req.params.id;
+  const { actor_role } = req.body || {};
+  if (!actor_role) {
+    return fail(res, 400, "validation_error", "actor_role is required");
+  }
+
+  try {
+    const q = await pool.query(
+      `update tasks
+         set status='todo',
+             status_reason=NULL
+       where id=$1
+         and status in ('done','failed','blocked')
+       returning id,title,status,assignee,primary_goal_id,status_reason`,
+      [taskId]
+    );
+
+    if (q.rowCount === 0) {
+      return fail(res, 409, "invalid_transition_or_not_found", "task not found or status transition is not allowed");
+    }
+
+    const row = q.rows[0];
+    await writeAction("task_reopened", "task", row.id, actor_role, {});
+    return ok(res, row);
+  } catch (e) {
+    return fail(res, 500, "task_reopen_failed", e.message);
+  }
+});
+
 app.listen(PORT, "127.0.0.1", () => {
   console.log(`stemford-control-api listening on 127.0.0.1:${PORT}`);
 });
