@@ -267,3 +267,7 @@ app.post("/approvals/decide", async (req, res) => {
     return fail(res, 500, "approval_decide_failed", e.message);
   }
 });
+
+app.listen(PORT, "127.0.0.1", () => {
+  console.log(`stemford-control-api listening on 127.0.0.1:${PORT}`);
+});
