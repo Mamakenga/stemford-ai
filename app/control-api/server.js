@@ -417,7 +417,7 @@ app.post("/tasks/:id/fail", async (req, res) => {
          set status='failed',
              status_reason=$2
        where id=$1
-         and status in ('todo','in_progress')
+         and status in ('todo','in_progress','blocked')
        returning id,title,status,assignee,primary_goal_id,status_reason`,
       [taskId, reason || null]
     );
