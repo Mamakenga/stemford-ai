@@ -377,16 +377,25 @@ bot.onText(/^\/run\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
   if (!taskId) return bot.sendMessage(msg.chat.id, "Формат: /run <task_id>");
 
   try {
-    const q = await pool.query(`update tasks
-       set status='in_progress'
-       where id=$1 and status in ('todo','blocked')
-       returning id,status,assignee`,
-      [taskId]
+    const resp = await fetch(
+      "http://127.0.0.1:3210/tasks/" + encodeURIComponent(taskId) + "/claim",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actor_role: "human_telegram" }),
+      }
     );
-    if (!q.rows.length) return bot.sendMessage(msg.chat.id, `Не удалось перевести в in_progress: ${taskId}`);
-    await bot.sendMessage(msg.chat.id, `Task started: ${q.rows[0].id} (assignee: ${q.rows[0].assignee})`);
+
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok || !data || !data.ok) {
+      const msgText = data && data.error && data.error.message ? data.error.message : "HTTP " + resp.status;
+      return bot.sendMessage(msg.chat.id, "Run error: " + msgText);
+    }
+
+    const assignee = data && data.data && data.data.assignee ? data.data.assignee : "n/a";
+    await bot.sendMessage(msg.chat.id, "Task started: " + taskId + " (assignee: " + assignee + ")");
   } catch (e) {
-    await bot.sendMessage(msg.chat.id, `Run error: ${e.message}`);
+    await bot.sendMessage(msg.chat.id, "Run error: " + e.message);
   }
 });
 
@@ -396,16 +405,24 @@ bot.onText(/^\/done\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
   if (!taskId) return bot.sendMessage(msg.chat.id, "Формат: /done <task_id>");
 
   try {
-    const q = await pool.query(`update tasks
-       set status='done'
-       where id=$1 and status in ('todo','in_progress','blocked')
-       returning id,status`,
-      [taskId]
+    const resp = await fetch(
+      "http://127.0.0.1:3210/tasks/" + encodeURIComponent(taskId) + "/complete",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actor_role: "human_telegram", summary: "done via telegram" }),
+      }
     );
-    if (!q.rows.length) return bot.sendMessage(msg.chat.id, `Не удалось закрыть задачу: ${taskId}`);
-    await bot.sendMessage(msg.chat.id, `Task done: ${q.rows[0].id}`);
+
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok || !data || !data.ok) {
+      const msgText = data && data.error && data.error.message ? data.error.message : "HTTP " + resp.status;
+      return bot.sendMessage(msg.chat.id, "Done error: " + msgText);
+    }
+
+    await bot.sendMessage(msg.chat.id, "Task done: " + taskId);
   } catch (e) {
-    await bot.sendMessage(msg.chat.id, `Done error: ${e.message}`);
+    await bot.sendMessage(msg.chat.id, "Done error: " + e.message);
   }
 });
 
