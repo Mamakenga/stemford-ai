@@ -8,7 +8,6 @@ const PORT = Number(process.env.CONTROL_API_PORT || 3210);
 const app = express();
 app.use(express.json());
 
-const port = Number(process.env.CONTROL_API_PORT || 3210);
 const conn = process.env.RAILWAY_DATABASE_URL;
 
 if (!conn) {
@@ -19,6 +18,7 @@ if (!conn) {
 const pool = new Pool({
   connectionString: conn,
   ssl: { rejectUnauthorized: false },
+  application_name: "control_api",
 });
 
 const ok = (res, data) =>
@@ -27,7 +27,7 @@ const ok = (res, data) =>
 const fail = (res, status, code, message) =>
   res.status(status).json({ ok: false, error: { code, message }, meta: { schema_version: "v1", ts: new Date().toISOString() } });
 
-app.get("/health", (_req, res) => ok(res, { service: "stemford-control-api", port }));
+app.get("/health", (_req, res) => ok(res, { service: "stemford-control-api", PORT }));
 
 app.get("/db/ping", async (_req, res) => {
   try {
@@ -151,9 +151,6 @@ app.get("/tasks", async (req, res) => {
   }
 });
 
-app.listen(port, "127.0.0.1", () => {
-  console.log(`stemford-control-api listening on 127.0.0.1:${port}`);
-});
 
 /* ===== approvals mvp routes ===== */
 const APPROVAL_CLASSES = new Set(["safe_read","internal_write","external_comm","financial_change","policy_change"]);
@@ -269,9 +266,6 @@ app.post("/approvals/decide", async (req, res) => {
   }
 });
 
-app.listen(PORT, "127.0.0.1", () => {
-  console.log(`stemford-control-api listening on 127.0.0.1:${PORT}`);
-});
 
 // Runtime bridge: claim task
 app.post("/tasks/:id/claim", async (req, res) => {
@@ -352,4 +346,8 @@ app.post("/tasks/:id/complete", async (req, res) => {
   } catch (e) {
     return fail(res, 500, "task_complete_failed", e.message);
   }
+});
+
+app.listen(PORT, "127.0.0.1", () => {
+  console.log(`stemford-control-api listening on 127.0.0.1:${PORT}`);
 });
