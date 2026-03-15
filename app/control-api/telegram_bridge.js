@@ -20,6 +20,9 @@ const pool = new Pool({
   connectionString: dbUrl,
   ssl: { rejectUnauthorized: false },
   application_name: "human_telegram",
+  max: 5,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
 });
 
 const bot = new TelegramBot(token, { polling: true });
@@ -370,7 +373,7 @@ bot.onText(/^\/goal\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
         union all
         select g.id,g.parent_id,g.title,g.stage,g.status,a.depth+1
         from goals g
-        join ancestors a on g.id = a.parent_id
+        join ancestors a on g.id = a.parent_id and a.depth < 10
       )
       select depth,id,parent_id,title,stage,status
       from ancestors

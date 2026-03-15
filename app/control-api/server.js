@@ -19,6 +19,9 @@ const pool = new Pool({
   connectionString: conn,
   ssl: { rejectUnauthorized: false },
   application_name: "control_api",
+  max: 5,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
 });
 
 const ok = (res, data) =>
@@ -99,7 +102,7 @@ app.get("/goals/:id/ancestry", async (req, res) => {
         UNION ALL
         SELECT g.id,g.parent_id,g.title,g.stage,g.status,a.depth+1
         FROM goals g
-        JOIN ancestors a ON g.id = a.parent_id
+        join ancestors a on g.id = a.parent_id and a.depth < 10
       )
       SELECT depth,id,parent_id,title,stage,status
       FROM ancestors
