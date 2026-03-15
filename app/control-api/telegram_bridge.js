@@ -419,10 +419,10 @@ bot.onText(/^\/block\s+([A-Za-z0-9_-]+)\s+(.+)$/, async (msg, m) => {
   try {
     const q = await pool.query(
       `update tasks
-       set status='blocked'
+       set status='blocked', status_reason=$2
        where id=$1 and status in ('todo','in_progress')
-       returning id,status`,
-      [taskId]
+       returning id,status,status_reason`,
+      [taskId, reason]
     );
     if (!q.rows.length) return bot.sendMessage(msg.chat.id, `Не удалось заблокировать задачу: ${taskId}`);
     await bot.sendMessage(msg.chat.id, `Task blocked: ${q.rows[0].id}\nreason: ${reason}`);
@@ -440,10 +440,10 @@ bot.onText(/^\/fail\s+([A-Za-z0-9_-]+)\s+(.+)$/, async (msg, m) => {
   try {
     const q = await pool.query(
       `update tasks
-       set status='failed'
+       set status='failed', status_reason=$2
        where id=$1 and status in ('todo','in_progress','blocked')
-       returning id,status`,
-      [taskId]
+       returning id,status,status_reason`,
+      [taskId, reason]
     );
     if (!q.rows.length) return bot.sendMessage(msg.chat.id, `Не удалось перевести в failed: ${taskId}`);
     await bot.sendMessage(msg.chat.id, `Task failed: ${q.rows[0].id}\nreason: ${reason}`);
