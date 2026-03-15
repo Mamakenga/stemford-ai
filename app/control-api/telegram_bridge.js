@@ -416,16 +416,24 @@ bot.onText(/^\/block\s+([A-Za-z0-9_-]+)\s+(.+)$/, async (msg, m) => {
   if (!taskId || !reason) return bot.sendMessage(msg.chat.id, "Формат: /block <task_id> <причина>");
 
   try {
-    const q = await pool.query(`update tasks
-       set status='blocked', status_reason=$2
-       where id=$1 and status in ('todo','in_progress')
-       returning id,status,status_reason`,
-      [taskId, reason]
+    const resp = await fetch(
+      "http://127.0.0.1:3210/tasks/" + encodeURIComponent(taskId) + "/block",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actor_role: "human_telegram", reason }),
+      }
     );
-    if (!q.rows.length) return bot.sendMessage(msg.chat.id, `Не удалось заблокировать задачу: ${taskId}`);
-    await bot.sendMessage(msg.chat.id, `Task blocked: ${q.rows[0].id}\nreason: ${reason}`);
+
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok || !data || !data.ok) {
+      const msgText = data && data.error && data.error.message ? data.error.message : "HTTP " + resp.status;
+      return bot.sendMessage(msg.chat.id, "Block error: " + msgText);
+    }
+
+    await bot.sendMessage(msg.chat.id, "Task blocked: " + taskId + "\nreason: " + reason);
   } catch (e) {
-    await bot.sendMessage(msg.chat.id, `Block error: ${e.message}`);
+    await bot.sendMessage(msg.chat.id, "Block error: " + e.message);
   }
 });
 
@@ -436,20 +444,26 @@ bot.onText(/^\/fail\s+([A-Za-z0-9_-]+)\s+(.+)$/, async (msg, m) => {
   if (!taskId || !reason) return bot.sendMessage(msg.chat.id, "Формат: /fail <task_id> <причина>");
 
   try {
-    const q = await pool.query(`update tasks
-       set status='failed', status_reason=$2
-       where id=$1 and status in ('todo','in_progress','blocked')
-       returning id,status,status_reason`,
-      [taskId, reason]
+    const resp = await fetch(
+      "http://127.0.0.1:3210/tasks/" + encodeURIComponent(taskId) + "/fail",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actor_role: "human_telegram", reason }),
+      }
     );
-    if (!q.rows.length) return bot.sendMessage(msg.chat.id, `Не удалось перевести в failed: ${taskId}`);
-    await bot.sendMessage(msg.chat.id, `Task failed: ${q.rows[0].id}\nreason: ${reason}`);
+
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok || !data || !data.ok) {
+      const msgText = data && data.error && data.error.message ? data.error.message : "HTTP " + resp.status;
+      return bot.sendMessage(msg.chat.id, "Fail error: " + msgText);
+    }
+
+    await bot.sendMessage(msg.chat.id, "Task failed: " + taskId + "\nreason: " + reason);
   } catch (e) {
-    await bot.sendMessage(msg.chat.id, `Fail error: ${e.message}`);
+    await bot.sendMessage(msg.chat.id, "Fail error: " + e.message);
   }
 });
-
-
 
 bot.onText(/^\/reopen\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
   if (!isAllowedMessage(msg)) return;
