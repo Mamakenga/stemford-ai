@@ -3,6 +3,7 @@ const { Pool } = require("pg");
 const dotenv = require("dotenv");
 
 dotenv.config({ path: "/opt/stemford/run/.env" });
+const PORT = Number(process.env.CONTROL_API_PORT || 3210);
 
 const app = express();
 app.use(express.json());
@@ -270,4 +271,85 @@ app.post("/approvals/decide", async (req, res) => {
 
 app.listen(PORT, "127.0.0.1", () => {
   console.log(`stemford-control-api listening on 127.0.0.1:${PORT}`);
+});
+
+// Runtime bridge: claim task
+app.post("/tasks/:id/claim", async (req, res) => {
+  const taskId = req.params.id;
+  const actor_role = String(req.body?.actor_role || "").trim();
+
+  if (!actor_role) {
+    return fail(res, 400, "bad_request", "actor_role is required");
+  }
+
+  try {
+    const q = await pool.query(
+      `
+      UPDATE tasks
+      SET status = 'in_progress',
+          claimed_by = $2,
+          claimed_at = now()
+      WHERE id = $1
+        AND status IN ('todo','blocked')
+      RETURNING id,title,status,assignee,claimed_by,claimed_at,primary_goal_id
+      `,
+      [taskId, actor_role]
+    );
+
+    if (q.rowCount === 0) {
+      return fail(res, 409, "not_claimable", "task is not in todo/blocked or does not exist");
+    }
+
+    const row = q.rows[0];
+    await writeAction("task_claimed", "task", row.id, actor_role, {
+      claimed_by: row.claimed_by,
+      claimed_at: row.claimed_at,
+      goal_id: row.primary_goal_id
+    });
+
+    return ok(res, row);
+  } catch (e) {
+    return fail(res, 500, "task_claim_failed", e.message);
+  }
+});
+
+// Runtime bridge: complete task
+app.post("/tasks/:id/complete", async (req, res) => {
+  const taskId = req.params.id;
+  const actor_role = String(req.body?.actor_role || "").trim();
+  const summary = String(req.body?.summary || "").trim();
+
+  if (!actor_role) {
+    return fail(res, 400, "bad_request", "actor_role is required");
+  }
+
+  try {
+    const q = await pool.query(
+      `
+      UPDATE tasks
+      SET status = 'done',
+          completed_at = now(),
+          status_reason = NULL
+      WHERE id = $1
+        AND status IN ('in_progress','blocked','todo')
+      RETURNING id,title,status,assignee,claimed_by,claimed_at,completed_at,primary_goal_id
+      `,
+      [taskId]
+    );
+
+    if (q.rowCount === 0) {
+      return fail(res, 409, "not_completable", "task is not in progress/blocked/todo or does not exist");
+    }
+
+    const row = q.rows[0];
+    await writeAction("task_completed", "task", row.id, actor_role, {
+      completed_at: row.completed_at,
+      goal_id: row.primary_goal_id,
+      summary: summary || null
+    });
+
+    return ok(res, row);
+  } catch (e) {
+    return fail(res, 500, "task_complete_failed", e.message);
+  }
 });
