@@ -109,12 +109,17 @@ Body:
 ```
 
 `reason` and `retry_after` are optional.
+Retry attempts are limited by `TASK_MAX_RETRY_ATTEMPTS` (default: `5`).
 
 Effects:
 - increments `retry_attempt`
 - sets `retry_after` (or null if omitted)
 - resets `claimed_by`, `claimed_at`, `completed_at`
 - writes `task_retry_queued` into `actions_log`
+
+Error cases:
+- `409 retry_limit_exceeded` — retry attempts reached max limit
+- `409 retry_conflict` — task state changed concurrently
 
 Example:
 ```bash

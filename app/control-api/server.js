@@ -4,6 +4,10 @@ const dotenv = require("dotenv");
 
 dotenv.config({ path: "/opt/stemford/run/.env" });
 const PORT = Number(process.env.CONTROL_API_PORT || 3210);
+const MAX_RETRY_ATTEMPTS = (() => {
+  const raw = Number(process.env.TASK_MAX_RETRY_ATTEMPTS || 5);
+  return Number.isInteger(raw) && raw > 0 ? raw : 5;
+})();
 
 const app = express();
 app.use(express.json());
@@ -485,6 +489,30 @@ app.post("/tasks/:id/retry", async (req, res) => {
   }
 
   try {
+    const current = await pool.query(
+      `select id,status,coalesce(retry_attempt,0) as retry_attempt
+       from tasks
+       where id=$1`,
+      [taskId]
+    );
+
+    if (current.rowCount === 0) {
+      return fail(res, 404, "not_found", "task not found");
+    }
+
+    const before = current.rows[0];
+    if (!["failed", "blocked"].includes(before.status)) {
+      return fail(res, 409, "invalid_transition_or_not_found", "task not found or retry transition is not allowed");
+    }
+    if (Number(before.retry_attempt) >= MAX_RETRY_ATTEMPTS) {
+      return fail(
+        res,
+        409,
+        "retry_limit_exceeded",
+        `retry limit reached: ${before.retry_attempt}/${MAX_RETRY_ATTEMPTS}`
+      );
+    }
+
     const q = await pool.query(
       `update tasks
          set status='todo',
@@ -496,12 +524,13 @@ app.post("/tasks/:id/retry", async (req, res) => {
              completed_at=NULL
        where id=$1
          and status in ('failed','blocked')
+         and coalesce(retry_attempt,0) < $4
        returning id,title,status,assignee,primary_goal_id,status_reason,retry_attempt,retry_after,claimed_by,claimed_at,completed_at`,
-      [taskId, reason, retryAfter]
+      [taskId, reason, retryAfter, MAX_RETRY_ATTEMPTS]
     );
 
     if (q.rowCount === 0) {
-      return fail(res, 409, "invalid_transition_or_not_found", "task not found or retry transition is not allowed");
+      return fail(res, 409, "retry_conflict", "task state changed, retry again");
     }
 
     const row = q.rows[0];
