@@ -140,7 +140,7 @@ app.get("/tasks", async (req, res) => {
   }
 
   const sql = `
-    select id,title,primary_goal_id,status,assignee,due_at
+    select id,title,primary_goal_id,status,assignee,due_at,retry_attempt,retry_after
     from tasks
     ${where.length ? "where " + where.join(" and ") : ""}
     order by due_at nulls last, id
@@ -462,6 +462,58 @@ app.post("/tasks/:id/reopen", async (req, res) => {
     return ok(res, row);
   } catch (e) {
     return fail(res, 500, "task_reopen_failed", e.message);
+  }
+});
+
+app.post("/tasks/:id/retry", async (req, res) => {
+  const taskId = req.params.id;
+  const actor_role = String(req.body?.actor_role || "").trim();
+  const reason = req.body?.reason ? String(req.body.reason) : null;
+  const retry_after_raw = req.body?.retry_after ? String(req.body.retry_after).trim() : "";
+
+  if (!actor_role) {
+    return fail(res, 400, "validation_error", "actor_role is required");
+  }
+
+  let retryAfter = null;
+  if (retry_after_raw) {
+    const parsed = new Date(retry_after_raw);
+    if (Number.isNaN(parsed.getTime())) {
+      return fail(res, 400, "validation_error", "retry_after must be a valid ISO datetime");
+    }
+    retryAfter = parsed.toISOString();
+  }
+
+  try {
+    const q = await pool.query(
+      `update tasks
+         set status='todo',
+             status_reason=$2,
+             retry_attempt=coalesce(retry_attempt,0)+1,
+             retry_after=$3,
+             claimed_by=NULL,
+             claimed_at=NULL,
+             completed_at=NULL
+       where id=$1
+         and status in ('failed','blocked')
+       returning id,title,status,assignee,primary_goal_id,status_reason,retry_attempt,retry_after,claimed_by,claimed_at,completed_at`,
+      [taskId, reason, retryAfter]
+    );
+
+    if (q.rowCount === 0) {
+      return fail(res, 409, "invalid_transition_or_not_found", "task not found or retry transition is not allowed");
+    }
+
+    const row = q.rows[0];
+    await writeAction("task_retry_queued", "task", row.id, actor_role, {
+      reason: row.status_reason,
+      retry_attempt: row.retry_attempt,
+      retry_after: row.retry_after
+    });
+
+    return ok(res, row);
+  } catch (e) {
+    return fail(res, 500, "task_retry_failed", e.message);
   }
 });
 

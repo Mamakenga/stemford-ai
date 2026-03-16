@@ -20,6 +20,11 @@ curl -s 'http://127.0.0.1:3210/tasks?status=in_progress'
 
 Response: `{ ok: true, data: { count: N, tasks: [...] } }`
 
+Task fields include:
+- `id`, `title`, `primary_goal_id`, `status`, `assignee`, `due_at`
+- `retry_attempt` (integer, starts from 0)
+- `retry_after` (datetime or null)
+
 ---
 
 ## POST /tasks
@@ -87,6 +92,36 @@ Body: `{ "actor_role": "finance", "reason": "Нет доступа к данны
 Reopen a done/failed/blocked task back to `todo`.
 
 Body: `{ "actor_role": "orchestrator" }`
+
+---
+
+## POST /tasks/:id/retry
+
+Queue retry for a `failed` or `blocked` task and return it to `todo`.
+
+Body:
+```json
+{
+  "actor_role": "orchestrator",
+  "reason": "Повтор после исправления входных данных",
+  "retry_after": "2026-03-17T08:30:00Z"
+}
+```
+
+`reason` and `retry_after` are optional.
+
+Effects:
+- increments `retry_attempt`
+- sets `retry_after` (or null if omitted)
+- resets `claimed_by`, `claimed_at`, `completed_at`
+- writes `task_retry_queued` into `actions_log`
+
+Example:
+```bash
+curl -s -X POST http://127.0.0.1:3210/tasks/tg_123456/retry \
+  -H "Content-Type: application/json" \
+  -d '{"actor_role":"orchestrator","reason":"Повтор после фикса","retry_after":"2026-03-17T08:30:00Z"}'
+```
 
 ---
 
