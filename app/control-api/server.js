@@ -322,12 +322,33 @@ app.post("/tasks/:id/claim", async (req, res) => {
           claimed_at = now()
       WHERE id = $1
         AND status IN ('todo','blocked')
-      RETURNING id,title,status,assignee,claimed_by,claimed_at,primary_goal_id
+        AND (retry_after IS NULL OR retry_after <= now())
+      RETURNING id,title,status,assignee,claimed_by,claimed_at,primary_goal_id,retry_after
       `,
       [taskId, actor_role]
     );
 
     if (q.rowCount === 0) {
+      const current = await pool.query(
+        `select id,status,retry_after,
+                (retry_after is not null and retry_after > now()) as retry_locked
+         from tasks
+         where id = $1`,
+        [taskId]
+      );
+
+      if (current.rowCount > 0) {
+        const row = current.rows[0];
+        if (["todo", "blocked"].includes(row.status) && row.retry_locked) {
+          return fail(
+            res,
+            409,
+            "retry_not_ready",
+            `task cannot be claimed before retry_after (${row.retry_after.toISOString()})`
+          );
+        }
+      }
+
       return fail(res, 409, "not_claimable", "task is not in todo/blocked or does not exist");
     }
 

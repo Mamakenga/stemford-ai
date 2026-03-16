@@ -54,10 +54,14 @@ curl -s -X POST http://127.0.0.1:3210/tasks \
 ## POST /tasks/:id/claim
 
 Take a task into work. Only works on tasks with status `todo` or `blocked`.
+If `retry_after` is set in the future, claim is rejected.
 
 Body: `{ "actor_role": "strategy" }`
 
 Sets status to `in_progress`, records `claimed_by` and `claimed_at`.
+
+Error cases:
+- `409 retry_not_ready` — task cannot be claimed before `retry_after`
 
 ---
 
