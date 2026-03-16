@@ -14,7 +14,10 @@ description: >
 
 ## API Base
 
-All requests go to `http://127.0.0.1:3210`. No auth token needed (loopback only).
+Default: `http://127.0.0.1:3210`. Port comes from `CONTROL_API_PORT` in `/opt/stemford/run/.env` (fallback: 3210).
+If connection refused, check: `grep CONTROL_API_PORT /opt/stemford/run/.env` and use that port.
+No auth token needed (loopback only).
+
 Use `curl -s` for GET, `curl -s -X POST -H "Content-Type: application/json" -d '{...}'` for POST.
 
 Every response has the shape `{ ok: true/false, data: {...}, meta: {...} }`.
@@ -61,9 +64,40 @@ backlog → todo → in_progress → done
 
 Default approvers: `external_comm` → strategy, `financial_change` → finance, `policy_change` → orchestrator.
 
+## POST Payloads (required fields)
+
+**POST /tasks** — create task:
+```json
+{ "title": "...", "primary_goal_id": "...", "assignee": "strategy", "actor_role": "orchestrator", "due_at": "2026-03-20T18:00:00Z" }
+```
+`due_at` is optional. Known goal IDs: `mission_stemford`, `stage_a_repositioning`, `stage_b_rebranding`, `stage_c_operations`, `goal_a_positioning_brief`, `goal_b_brand_rollout`, `goal_c_ops_dashboard`.
+
+**POST /tasks/:id/claim, /complete, /block, /fail, /reopen**:
+```json
+{ "actor_role": "strategy" }
+```
+`/complete` also accepts optional `"summary"`. `/block` and `/fail` accept optional `"reason"`.
+
+**POST /handoff/validate**:
+```json
+{ "caller_role_id": "orchestrator", "callee_role_id": "finance" }
+```
+
+**POST /approvals/request**:
+```json
+{ "action_class": "financial_change", "entity_type": "task", "entity_id": "tg_123", "requested_by_role": "pmo", "reason": "..." }
+```
+`approver_role` optional (auto-selected by action_class). `reason` optional.
+
+**POST /approvals/decide**:
+```json
+{ "approval_id": "apr_123_abc", "decision": "approved", "decided_by_role": "finance", "reason": "..." }
+```
+`decision`: `approved` or `rejected`. `reason` optional.
+
 ## Detailed API Docs
 
-For full request/response schemas with examples, read [references/api.md](references/api.md).
+For full request/response schemas with curl examples, read [references/api.md](references/api.md).
 
 ## Language
 
