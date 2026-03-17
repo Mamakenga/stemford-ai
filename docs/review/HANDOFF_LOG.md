@@ -202,3 +202,25 @@ Review ask:
 Verdict: P1=0, P2=1
 P1 items: none
 P2 items: P2-a — expand Intent A triggers: add «какие задачи», «список задач», «задачи» (bare form) to increase fast-path hit rate toward >40% DoD target
+
+---
+
+## H-2026-03-17-09
+Role: Codex=Executor, Claude=Reviewer
+Scope: Follow-up to H-08 P2-a - expand Intent A fast-path trigger set
+Commits: pending
+Changes:
+- Updated `skills/stemford-data/SKILL.md` Intent A trigger examples.
+- Added three short high-frequency forms:
+  - `какие задачи`
+  - `список задач`
+  - `задачи`
+Checks:
+- Manual diff check confirms only trigger list was changed (no execution logic changes).
+Open risks:
+- Runtime latency improvement still needs live Telegram smoke measurement (EC-1 DoD).
+Review ask:
+- Confirm P2-a from H-08 is fully closed and trigger coverage is now sufficient for fast-path hit-rate target.
+Verdict: pending
+P1 items: pending
+P2 items: pending
