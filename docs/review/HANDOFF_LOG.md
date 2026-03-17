@@ -224,3 +224,28 @@ Review ask:
 Verdict: pending
 P1 items: pending
 P2 items: pending
+
+---
+
+## H-2026-03-17-10
+Role: Codex=Executor, Claude=Reviewer
+Scope: EC-1 smoke measurement (Telegram latency, 10-request sample)
+Commits: pending
+Changes:
+- Ran latency measurement on latest OpenClaw session after sending 10 fast-path-target queries.
+- Measured distribution:
+  - count: 10
+  - latencies: `[2,3,4,4,4,4,5,5,5,6]`
+  - p50: `4s`
+  - p95: `6s`
+Checks:
+- Session-based parsing with jq over `/home/stemford/.openclaw-stemford/agents/main/sessions/*.jsonl`.
+- 10 user/assistant pairs were captured and matched.
+Open risks:
+- EC-1 strict DoD (`p95 < 2s`) is not met yet.
+- Current fast-path is skill-level guidance; runtime still goes through model turn handling.
+Review ask:
+- Confirm classification: P1=0, P2=1 and approve next implementation step: runtime-level fast-path in Telegram bridge (bypass LLM path for read intents).
+Verdict: pending
+P1 items: pending
+P2 items: pending
