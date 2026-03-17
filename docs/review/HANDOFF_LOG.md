@@ -382,7 +382,7 @@ P2 items: none — EC-4 complete, contracts and smoke checks validated
 ## H-2026-03-17-15
 Role: Codex=Executor, Claude=Reviewer
 Scope: §29.4.1 TaskSpecify-lite MVP in `stemford-data` skill
-Commits: pending
+Commits: 5f82c1c
 Changes:
 - Updated `skills/stemford-data/SKILL.md` with deterministic TaskSpecify-lite flow for create-task intents:
   - keyword-based assignee mapping,
@@ -393,10 +393,17 @@ Changes:
 - Added explicit anti-pattern rule: avoid open-ended clarifying questions like "какой трекер?" for task creation.
 Checks:
 - Manual review: section is scoped to create-task intents and does not alter EC-1 fast-path read flows.
+- Telegram smoke (2026-03-17):
+  - First run after deploy failed behavior check (bot still asked multi-parameter questions).
+  - Root cause: stale OpenClaw session context.
+  - Mitigation: backed up and reset `/home/stemford/.openclaw-stemford/agents/main/sessions/*`, restarted `stemford-openclaw-runtime`.
+  - Second run passed expected behavior:
+    - input: `создай задачу: подготовить презентацию для родителей`
+    - output: compact draft with inferred `assignee=PMO`, `goal_id=stage_c_operations`, confirmation `Ок?`.
 Open risks:
-- Runtime behavior depends on model adherence to skill instructions (no hard runtime enforcement yet).
+- Latency remains high (~2 minutes in latest smoke) despite correct TaskSpecify-lite behavior.
 Review ask:
-- Validate TaskSpecify-lite prompt design for clarity and practical trigger coverage in Telegram.
+- Validate TaskSpecify-lite behavior after session-reset mitigation and assess whether latency should be tracked as separate P2/OI item.
 Verdict: pending
 P1 items: pending
 P2 items: pending

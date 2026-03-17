@@ -97,3 +97,15 @@ Steps:
 - [x] smoke: `GET /readiness` returns `ok:true` + `status:"ready"`
 - [x] smoke: `GET /diagnostics` returns `ok:true` + queue/webhook/uptime fields
 Result: OK
+
+## D-2026-03-17-08
+Handoff: H-2026-03-17-15
+SHA: 5f82c1c (TaskSpecify-lite skill update)
+Steps:
+- [x] git pull
+- [x] runtime restart (`stemford-openclaw-runtime`)
+- [x] first smoke failed (stale session behavior)
+- [x] session backup + reset (`~/.openclaw-stemford/agents/main/sessions/*`)
+- [x] runtime restart
+- [x] second smoke passed: bot returns draft + confirmation `Ок?`
+Result: OK (behavior fixed after session reset; latency remains high and tracked in handoff)
