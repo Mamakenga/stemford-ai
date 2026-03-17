@@ -259,6 +259,31 @@ scenario_7_memory_cards() {
   log_pass "S7 memory cards: create/read/maintenance"
 }
 
+scenario_8_critic_class_a_reason_required() {
+  local ent_id ent_id_sql resp
+  ent_id="smoke_critic_${RANDOM}_$(date +%s)"
+  SMOKE_ENTITY_IDS+=("$ent_id")
+  ent_id_sql="$(sql_literal "$ent_id")"
+
+  resp="$(curl -sS -X POST "$API_BASE/approvals/request" \
+    -H "Content-Type: application/json" \
+    -d "{\"action_class\":\"financial_change\",\"entity_type\":\"task\",\"entity_id\":\"${ent_id}\",\"requested_by_role\":\"orchestrator\"}")"
+
+  if echo "$resp" | jq -e '.ok == false and .error.code == "critic_policy_denied"' >/dev/null; then
+    if psql "$DB_URL" -At -c "
+      select count(*)
+      from actions_log
+      where action_type='critic_policy_denied' and entity_id = ${ent_id_sql};
+    " | grep -q '^[1-9][0-9]*$'; then
+      log_pass "S8 critic class-A reason: denied + actions_log"
+    else
+      log_fail "S8 critic class-A reason: missing critic_policy_denied log"
+    fi
+  else
+    log_fail "S8 critic class-A reason: expected critic_policy_denied"
+  fi
+}
+
 echo "Running smoke scenarios against $API_BASE"
 echo "---"
 
@@ -269,6 +294,7 @@ scenario_4_watchdog_stalled "$TASK_ID"
 scenario_5_retry_limit "$TASK_ID"
 scenario_6_pmo_forbidden_finance_command
 scenario_7_memory_cards
+scenario_8_critic_class_a_reason_required
 
 echo "---"
 echo "Summary: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"

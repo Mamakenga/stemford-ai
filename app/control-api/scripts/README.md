@@ -25,3 +25,4 @@
   - S5 retry limit
   - S6 forbidden PMO financial command + audit
   - S7 memory cards create/read/maintenance
+  - S8 critic class-A request without reason -> denied + audit

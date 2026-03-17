@@ -658,3 +658,50 @@ Review ask:
 Verdict: P1=0, P2=0
 P1 items: none
 P2 items: none — H-22 P2-a/P2-b fully closed by H-23
+
+---
+
+## H-2026-03-17-24
+Role: Codex=Executor, Claude=Reviewer
+Scope: §29.4.2 Critic pattern MVP (hard-policy layer only)
+Commits: pending
+Changes:
+- Updated `app/control-api/server.js`:
+  - new feature flag: `CONTROL_API_ENABLE_HARD_CRITIC` (default `1`);
+  - new class-A set: `external_comm`, `financial_change`, `policy_change`;
+  - new helper `runHardPolicyCritic(...)`:
+    - blocks class-A approval request without reason (`min 5 chars`);
+    - validates `approvals.decide` target before mutation (exists, pending, assigned approver);
+    - for class-A `approved` decision requires reason (`min 5 chars`);
+  - new wrapper `requireHardPolicyCritic(...)`:
+    - on deny returns `409 critic_policy_denied`;
+    - writes `critic_policy_denied` into `actions_log` with code/message.
+  - new endpoint `POST /critic/check` (dry-run hard check with `allow:true/false`).
+  - integrated hard-critic into:
+    - `POST /approvals/request`
+    - `POST /approvals/decide`
+- Updated docs:
+  - `skills/stemford-data/references/api.md`:
+    - new `POST /critic/check` section,
+    - hard-critic rules for approvals request/decide,
+    - new env flag documentation.
+  - `skills/stemford-data/SKILL.md`:
+    - quick reference row for `/critic/check`,
+    - class-A reason requirement note.
+- Updated smoke:
+  - `app/control-api/scripts/smoke_scenarios.sh`:
+    - new `S8` checks critic deny for class-A request without reason + audit log.
+  - `app/control-api/scripts/README.md`:
+    - updated scenario coverage with S8.
+Checks:
+- `node --check app/control-api/server.js` passed.
+- Static review: critic checks are deterministic and independent from LLM.
+Open risks:
+- Existing approval clients that send empty reason for class-A actions will now receive `409 critic_policy_denied` and need reason field.
+- Full runtime verification deferred to VPS smoke (S8) after deploy.
+Review ask:
+- Validate hard-critic policy boundaries (false-positive/false-negative risk) and confirm class-A reason rule is acceptable.
+- Validate `/critic/check` contract and audit trail (`critic_policy_denied`) semantics.
+Verdict: pending
+P1 items: pending
+P2 items: pending

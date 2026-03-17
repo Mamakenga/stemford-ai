@@ -41,6 +41,7 @@ Always check `ok` field before presenting results.
 | Request approval | POST | `/approvals/request` |
 | Pending approvals | GET | `/approvals/pending?approver_role=` |
 | Decide approval | POST | `/approvals/decide` |
+| Critic hard-check | POST | `/critic/check` |
 | Actions feed | GET | `/actions/feed?limit=&format=` |
 | Create memory card | POST | `/memory/cards` |
 | List memory cards | GET | `/memory/cards?actor_role=&user_id=&topic=` |
@@ -101,6 +102,9 @@ Default approvers: `external_comm` → strategy, `financial_change` → finance,
 { "approval_id": "apr_123_abc", "decision": "approved", "decided_by_role": "finance", "reason": "..." }
 ```
 `decision`: `approved` or `rejected`. `reason` optional.
+
+Critic note:
+- for class-A approvals (`external_comm`, `financial_change`, `policy_change`) always include a concrete `reason` (>=5 chars), otherwise hard-policy critic blocks with `critic_policy_denied`.
 
 ## Detailed API Docs
 

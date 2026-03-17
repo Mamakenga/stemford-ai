@@ -14,6 +14,7 @@ If a role tries a forbidden action, API returns:
 Feature flag:
 - `CONTROL_API_ENFORCE_TOOL_ACCESS=1` (default: enabled)
 - set to `0` for permissive rollback mode
+- `CONTROL_API_ENABLE_HARD_CRITIC=1` (default: enabled, second pass for risky actions)
 
 Allowed action keys:
 
@@ -49,6 +50,41 @@ Rollback/permissive mode:
 Notes:
 - Notifications are best-effort and do not break API responses.
 - Source of truth remains `actions_log`; webhook is an additional alert channel.
+
+---
+
+## POST /critic/check
+
+Deterministic hard-policy critic check for risky actions.
+
+Body:
+```json
+{
+  "actor_role": "orchestrator",
+  "action_key": "approvals.request.financial_change",
+  "entity_type": "task",
+  "entity_id": "tg_123",
+  "action_class": "financial_change",
+  "approval_id": "apr_123",
+  "decision": "approved",
+  "reason": "budget change approved by policy"
+}
+```
+
+Rules currently enforced:
+- class-A approval requests (`external_comm`, `financial_change`, `policy_change`) require `reason` >= 5 chars
+- approval decisions require:
+  - existing approval record
+  - `status='pending'`
+  - `actor_role` equals assigned `approver_role`
+  - for class-A approve: `reason` >= 5 chars
+
+Response:
+- `{ ok:true, data:{ allow:true } }` when pass
+- `{ ok:true, data:{ allow:false, code, message } }` when denied
+
+Audit:
+- denied checks are logged as `action_type='critic_policy_denied'`
 
 ---
 
@@ -326,6 +362,11 @@ Body:
 - financial_change → finance
 - policy_change → orchestrator
 
+Additional hard-critic rule:
+- for class-A requests (`external_comm`, `financial_change`, `policy_change`) `reason` is required (min 5 chars), otherwise:
+  - HTTP `409`
+  - `error.code = "critic_policy_denied"`
+
 ---
 
 ## GET /approvals/pending
@@ -353,6 +394,14 @@ Body:
 ```
 
 `decision`: `approved` or `rejected`.
+
+Additional hard-critic rules:
+- decision is denied when approval record is missing/not pending/not assigned to this approver:
+  - HTTP `409`
+  - `error.code = "critic_policy_denied"`
+- class-A approve requires `reason` (min 5 chars):
+  - HTTP `409`
+  - `error.code = "critic_policy_denied"`
 
 ---
 

@@ -10,6 +10,7 @@ const MAX_RETRY_ATTEMPTS = (() => {
   return Number.isInteger(raw) && raw > 0 ? raw : 5;
 })();
 const CONTROL_API_ENFORCE_TOOL_ACCESS = String(process.env.CONTROL_API_ENFORCE_TOOL_ACCESS || "1") !== "0";
+const CONTROL_API_ENABLE_HARD_CRITIC = String(process.env.CONTROL_API_ENABLE_HARD_CRITIC || "1") !== "0";
 const CONTROL_API_TELEGRAM_WEBHOOK_ENABLED = String(process.env.CONTROL_API_TELEGRAM_WEBHOOK_ENABLED || "1") !== "0";
 const STALL_WATCHDOG_THRESHOLD_MIN = (() => {
   const raw = Number(process.env.STALL_WATCHDOG_THRESHOLD_MIN || 120);
@@ -599,6 +600,7 @@ app.post("/memory/cards/maintenance", async (req, res) => {
 
 /* ===== approvals mvp routes ===== */
 const APPROVAL_CLASSES = new Set(["safe_read","internal_write","external_comm","financial_change","policy_change"]);
+const CLASS_A_APPROVALS = new Set(["external_comm", "financial_change", "policy_change"]);
 const DEFAULT_APPROVER = {
   external_comm: "strategy",
   financial_change: "finance",
@@ -769,6 +771,146 @@ async function requireToolAccess(res, roleRaw, actionKey, ctx = {}) {
   return false;
 }
 
+async function runHardPolicyCritic(input) {
+  if (!CONTROL_API_ENABLE_HARD_CRITIC) return { allow: true };
+
+  const actorRole = String(input.actor_role || "").trim();
+  const actionKey = String(input.action_key || "").trim();
+  const reason = String(input.reason || "").trim();
+  const approvalId = String(input.approval_id || "").trim();
+  const decision = String(input.decision || "").trim();
+  const actionClass = String(input.action_class || "").trim();
+
+  // Class-A approval requests must always include a non-trivial reason.
+  if (actionKey.startsWith("approvals.request.") && CLASS_A_APPROVALS.has(actionClass)) {
+    if (reason.length < 5) {
+      return {
+        allow: false,
+        code: "critic_reason_required",
+        message: "class-A approval request requires a reason (min 5 chars)",
+      };
+    }
+  }
+
+  // Approval decisions are risky: check target state before mutation.
+  if (actionKey === "approvals.decide") {
+    if (!approvalId || !decision) {
+      return {
+        allow: false,
+        code: "critic_validation_error",
+        message: "approval_id and decision are required for critic check",
+      };
+    }
+
+    const q = await pool.query(
+      `select approval_id,status,approver_role,action_class
+       from approval_requests
+       where approval_id = $1`,
+      [approvalId]
+    );
+    if (q.rowCount === 0) {
+      return {
+        allow: false,
+        code: "critic_approval_not_found",
+        message: "approval request not found",
+      };
+    }
+
+    const row = q.rows[0];
+    if (row.status !== "pending") {
+      return {
+        allow: false,
+        code: "critic_approval_not_pending",
+        message: "approval is not pending",
+      };
+    }
+    if (String(row.approver_role || "") !== actorRole) {
+      return {
+        allow: false,
+        code: "critic_wrong_approver",
+        message: "actor is not the assigned approver",
+      };
+    }
+
+    // Class-A approvals must keep a short audit reason on decision.
+    if (decision === "approved" && CLASS_A_APPROVALS.has(String(row.action_class || "")) && reason.length < 5) {
+      return {
+        allow: false,
+        code: "critic_reason_required",
+        message: "class-A approval decision requires a reason (min 5 chars)",
+      };
+    }
+  }
+
+  return { allow: true };
+}
+
+async function requireHardPolicyCritic(res, input) {
+  try {
+    const result = await runHardPolicyCritic(input);
+    if (result.allow) return true;
+
+    const actorRole = String(input.actor_role || "unknown").trim() || "unknown";
+    const entityType = String(input.entity_type || "policy");
+    const entityId = String(input.entity_id || input.action_key || "critic");
+    await writeAction("critic_policy_denied", entityType, entityId, actorRole, {
+      action_key: String(input.action_key || ""),
+      critic_code: result.code,
+      message: result.message,
+    });
+    fail(res, 409, "critic_policy_denied", result.message || "hard-policy critic denied action");
+    return false;
+  } catch (e) {
+    fail(res, 500, "critic_check_failed", e.message);
+    return false;
+  }
+}
+
+app.post("/critic/check", async (req, res) => {
+  const actor_role = String(req.body?.actor_role || "").trim();
+  const action_key = String(req.body?.action_key || "").trim();
+  const entity_type = String(req.body?.entity_type || "policy").trim();
+  const entity_id = String(req.body?.entity_id || action_key || "critic").trim();
+  const action_class = req.body?.action_class ? String(req.body.action_class).trim() : "";
+  const approval_id = req.body?.approval_id ? String(req.body.approval_id).trim() : "";
+  const decision = req.body?.decision ? String(req.body.decision).trim() : "";
+  const reason = req.body?.reason ? String(req.body.reason) : "";
+
+  if (!actor_role || !action_key) {
+    return fail(res, 400, "validation_error", "actor_role and action_key are required");
+  }
+
+  const allowed = await requireToolAccess(
+    res,
+    actor_role,
+    action_key,
+    { entity_type, entity_id }
+  );
+  if (!allowed) return;
+
+  const result = await runHardPolicyCritic({
+    actor_role,
+    action_key,
+    entity_type,
+    entity_id,
+    action_class,
+    approval_id,
+    decision,
+    reason,
+  });
+
+  if (!result.allow) {
+    await writeAction("critic_policy_denied", entity_type, entity_id, actor_role, {
+      action_key,
+      critic_code: result.code,
+      message: result.message,
+    });
+    return ok(res, { allow: false, code: result.code, message: result.message });
+  }
+
+  return ok(res, { allow: true });
+});
+
 app.post("/approvals/request", async (req, res) => {
   const { action_class, entity_type, entity_id, requested_by_role, approver_role, reason } = req.body || {};
 
@@ -790,6 +932,17 @@ app.post("/approvals/request", async (req, res) => {
     { entity_type, entity_id }
   );
   if (!allowed) return;
+  {
+    const criticAllowed = await requireHardPolicyCritic(res, {
+      actor_role: requested_by_role,
+      action_key: `approvals.request.${action_class}`,
+      entity_type,
+      entity_id,
+      action_class,
+      reason: reason || "",
+    });
+    if (!criticAllowed) return;
+  }
 
   const approval_id = id("apr");
 
@@ -850,6 +1003,18 @@ app.post("/approvals/decide", async (req, res) => {
     { entity_type: "approval", entity_id: approval_id }
   );
   if (!allowed) return;
+  {
+    const criticAllowed = await requireHardPolicyCritic(res, {
+      actor_role: decided_by_role,
+      action_key: "approvals.decide",
+      entity_type: "approval",
+      entity_id: approval_id,
+      approval_id,
+      decision,
+      reason: reason || "",
+    });
+    if (!criticAllowed) return;
+  }
 
   try {
     const q = await pool.query(
