@@ -221,9 +221,9 @@ Open risks:
 - Runtime latency improvement still needs live Telegram smoke measurement (EC-1 DoD).
 Review ask:
 - Confirm P2-a from H-08 is fully closed and trigger coverage is now sufficient for fast-path hit-rate target.
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=0
+P1 items: none
+P2 items: none — H-08 P2-a fully closed, trigger set sufficient
 
 ---
 
@@ -246,6 +246,6 @@ Open risks:
 - Current fast-path is skill-level guidance; runtime still goes through model turn handling.
 Review ask:
 - Confirm classification: P1=0, P2=1 and approve next implementation step: runtime-level fast-path in Telegram bridge (bypass LLM path for read intents).
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=1
+P1 items: none
+P2 items: P2-a — EC-1 DoD not met (p95=6s vs target <2s). Next step: runtime-level fast-path bypass in telegram_bridge (OI-8). Approved.
