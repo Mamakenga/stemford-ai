@@ -86,27 +86,27 @@ function toHumanFeedText(row) {
 
   switch (row.action_type) {
     case "task_created":
-      return `[${hhmm}] ${actor} -> created ${row.entity_id}${payload.title ? ` "${payload.title}"` : ""}`;
+      return `[${hhmm}] ${actor} -> создал ${row.entity_id}${payload.title ? ` "${payload.title}"` : ""}`;
     case "task_claimed":
-      return `[${hhmm}] ${actor} -> claimed ${row.entity_id}`;
+      return `[${hhmm}] ${actor} -> взял в работу ${row.entity_id}`;
     case "task_completed":
-      return `[${hhmm}] ${actor} -> completed ${row.entity_id}`;
+      return `[${hhmm}] ${actor} -> завершил ${row.entity_id}`;
     case "task_failed":
-      return `[${hhmm}] ${actor} -> failed ${row.entity_id}${payload.reason ? ` (${payload.reason})` : ""}`;
+      return `[${hhmm}] ${actor} -> провалил ${row.entity_id}${payload.reason ? ` (${payload.reason})` : ""}`;
     case "task_retry_queued":
-      return `[${hhmm}] ${actor} -> retry queued ${row.entity_id}${payload.retry_after ? ` (after ${payload.retry_after})` : ""}`;
+      return `[${hhmm}] ${actor} -> поставил в повтор ${row.entity_id}${payload.retry_after ? ` (после ${payload.retry_after})` : ""}`;
     case "retry_limit_exceeded":
-      return `[${hhmm}] ${actor} -> retry limit exceeded ${row.entity_id}`;
+      return `[${hhmm}] ${actor} -> достиг лимита повторов ${row.entity_id}`;
     case "task_stalled_auto_blocked":
-      return `[${hhmm}] ${actor} -> auto-blocked stalled ${row.entity_id}`;
+      return `[${hhmm}] ${actor} -> авто-блокировка зависшей ${row.entity_id}`;
     case "approval_requested":
-      return `[${hhmm}] ${actor} -> approval requested ${payload.approval_id || row.entity_id}`;
+      return `[${hhmm}] ${actor} -> запросил одобрение ${payload.approval_id || row.entity_id}`;
     case "approval_approved":
-      return `[${hhmm}] ${actor} -> approval approved ${payload.approval_id || row.entity_id}`;
+      return `[${hhmm}] ${actor} -> одобрение подтверждено ${payload.approval_id || row.entity_id}`;
     case "approval_rejected":
-      return `[${hhmm}] ${actor} -> approval rejected ${payload.approval_id || row.entity_id}`;
+      return `[${hhmm}] ${actor} -> одобрение отклонено ${payload.approval_id || row.entity_id}`;
     case "tool_access_denied":
-      return `[${hhmm}] ${actor} -> access denied ${payload.action_key || target}`;
+      return `[${hhmm}] ${actor} -> доступ запрещён ${payload.action_key || target}`;
     default:
       return `[${hhmm}] ${actor} -> ${row.action_type} ${target}`;
   }

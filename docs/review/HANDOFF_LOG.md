@@ -551,3 +551,26 @@ Review ask:
 Verdict: P1=0, P2=1
 P1 items: none
 P2 items: локализация human feed (`toHumanFeedText`) под русскоязычный Telegram (backlog)
+
+---
+
+## H-2026-03-17-21
+Role: Codex=Executor, Claude=Reviewer
+Scope: Follow-up to H-20 P2-a — localize `toHumanFeedText` for Russian Telegram
+Commits: pending
+Changes:
+- Updated `toHumanFeedText(...)` in `app/control-api/server.js`:
+  - localized action phrases from English to Russian for known action types:
+    `task_created`, `task_claimed`, `task_completed`, `task_failed`,
+    `task_retry_queued`, `retry_limit_exceeded`, `task_stalled_auto_blocked`,
+    `approval_requested`, `approval_approved`, `approval_rejected`, `tool_access_denied`.
+- Kept endpoint contract unchanged (`GET /actions/feed`, same fields/shape).
+Checks:
+- `node --check app/control-api/server.js` passed.
+Open risks:
+- Timestamp in text remains `HH:MM` from ISO timestamp (UTC-based formatting); if local-time display is required, follow-up conversion may be needed.
+Review ask:
+- Confirm that Russian localization closes H-20 P2-a without API regressions.
+Verdict: pending
+P1 items: pending
+P2 items: pending
