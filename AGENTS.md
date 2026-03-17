@@ -36,3 +36,12 @@ Rule:
 - P2 = не блокирует мерж, фиксируется в backlog.
 - VPS — только применение, не разработка.
 - Smoke-проверки обязательны перед мержем (curl / manual test / log check).
+- **Git**: Executor делает `git add / commit / push` самостоятельно. Не проси человека запускать git-команды руками.
+
+### Журнал ревью (единый источник правды)
+
+- **`docs/review/HANDOFF_LOG.md`** — запись на каждый цикл: Changes / Checks / Open risks / Review ask / Verdict.
+- **`docs/review/DEPLOY_LOG.md`** — запись на каждый деплой: SHA, migrate, restart, smoke.
+- В каждом commit message добавлять `Handoff: H-YYYY-MM-DD-NN`.
+- **Merge gate**: мерж только если `Verdict: P1=0`.
+- **Deploy gate**: отдельная запись в DEPLOY_LOG после мержа.
