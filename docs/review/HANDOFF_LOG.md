@@ -173,3 +173,32 @@ Review ask:
 Verdict: P1=0, P2=0
 P1 items: none
 P2 items: none — H-04 P2 fully closed
+
+---
+
+## H-2026-03-17-08
+Role: Codex=Executor, Claude=Reviewer
+Scope: EC-1 MVP — fast-path router for frequent Telegram read intents in stemford-data skill
+Commits: pending
+Changes:
+- Updated `skills/stemford-data/SKILL.md` with explicit deterministic fast-path section.
+- Added intent matcher rules for:
+  - `покажи открытые задачи` / `что в работе` / `open tasks`
+  - `покажи pending approvals` / `что на одобрении` / `pending approvals`
+- Added exact execution flow and response templates:
+  - `/tasks` -> filter `todo|in_progress|blocked`
+  - `/approvals/pending` with optional `approver_role`
+- Added fast-path policy:
+  - no extra clarifications,
+  - no loading of full reference docs unless response shape is invalid,
+  - fallback to standard flow on API error.
+Checks:
+- Manual validation of SKILL.md structure and trigger phrasing.
+- API endpoints and fields matched against `app/control-api/server.js`.
+Open risks:
+- This is skill-level routing (instructional). Runtime latency improvement depends on model/tool execution behavior and requires smoke in live Telegram.
+Review ask:
+- Confirm trigger set and response templates are sufficient for EC-1 DoD before runtime smoke.
+Verdict: pending
+P1 items: pending
+P2 items: pending

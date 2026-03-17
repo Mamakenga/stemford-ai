@@ -105,3 +105,59 @@ For full request/response schemas with curl examples, read [references/api.md](r
 
 Respond to Natalia in Russian. Format output as readable summaries, not raw JSON.
 When listing tasks, use a table or bullet list with title, assignee, status, and due date.
+
+## Fast-path Router (EC-1 MVP)
+
+For two frequent read intents, use deterministic fast-path first. Do not ask clarifying questions unless data is missing.
+
+### Intent A: "show open tasks"
+
+Trigger examples:
+- "покажи открытые задачи"
+- "что в работе"
+- "open tasks"
+- "покажи задачи в работе"
+
+Execution:
+1. Run:
+```bash
+curl -s 'http://127.0.0.1:3210/tasks'
+```
+2. From `data.tasks`, keep only statuses: `todo`, `in_progress`, `blocked`.
+3. Sort by `due_at` (nulls last), then by `id`.
+
+Response template:
+- If empty: `Открытых задач нет (0).`
+- Else:
+  - Header: `Открытые задачи (N):`
+  - Each item: `• <title> — <assignee> — status: <status> — срок: <due_at|—>`
+
+### Intent B: "show pending approvals"
+
+Trigger examples:
+- "покажи pending approvals"
+- "какие ждут одобрения"
+- "что на одобрении"
+- "pending approvals"
+
+Execution:
+1. If message mentions role (`strategy`, `finance`, `pmo`, `orchestrator`), call:
+```bash
+curl -s 'http://127.0.0.1:3210/approvals/pending?approver_role=<role>'
+```
+2. Otherwise call:
+```bash
+curl -s 'http://127.0.0.1:3210/approvals/pending'
+```
+
+Response template:
+- If empty: `Ожидающих одобрений нет (0).`
+- Else:
+  - Header: `Ожидающие одобрения (N):`
+  - Each item: `• <approval_id> — <action_class> — <entity_type>:<entity_id> — approver: <approver_role>`
+
+### Fast-path policy
+
+1. For these two intents, do not load `references/api.md` unless API response shape is invalid.
+2. For these two intents, do not switch to broad reasoning: execute API call, format, return.
+3. If API returns `ok:false` or transport error, return short error and then fall back to standard skill flow.
