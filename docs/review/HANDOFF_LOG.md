@@ -159,7 +159,7 @@ P2 items: none — mismatch fully closed
 ## H-2026-03-17-07
 Role: Codex=Executor, Claude=Reviewer
 Scope: Follow-up to Claude P2 from H-04: clarify Finance escalation path
-Commits: pending
+Commits: 1e55010
 Changes:
 - Updated `agents/finance-kpi/SOUL.md` Role Definition line 6:
   - from `escalates_to = Human Owner`
