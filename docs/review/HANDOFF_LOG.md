@@ -170,6 +170,6 @@ Open risks:
 - none
 Review ask:
 - Confirm that this closes the remaining H-04 P2 item (Finance escalation path ambiguity).
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=0
+P1 items: none
+P2 items: none — H-04 P2 fully closed
