@@ -76,3 +76,13 @@ Steps:
 - [x] smoke: `POST /tasks/:id/retry` at cap returns `retry_limit_exceeded`
 - [x] smoke: `actions_log` includes `approval_requested`, `task_failed`, `retry_limit_exceeded` for EC-2 test entities
 Result: OK (API + actions_log path verified; Telegram receipt to be confirmed by operator)
+
+## D-2026-03-17-06
+Handoff: H-2026-03-17-13
+SHA: 4455ee7 (EC-2 follow-up: Telegram API reject logging)
+Steps:
+- [x] git pull
+- [x] migrate: not needed
+- [x] restart stemford-control-api
+- [x] smoke: `systemctl is-active stemford-control-api` -> `active`
+Result: OK

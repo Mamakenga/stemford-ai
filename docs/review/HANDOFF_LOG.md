@@ -321,16 +321,16 @@ Open risks:
 - Explicit Telegram receipt confirmation is not captured in this thread log (API + actions_log path is confirmed end-to-end).
 Review ask:
 - Validate EC-2 implementation and review for regressions/risk (notably: no response blocking, no impact on actions_log writes).
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=1
+P1 items: none
+P2 items: add explicit Telegram API reject/HTTP error logging in `sendTelegramNotification` (closed in H-13)
 
 ---
 
 ## H-2026-03-17-13
 Role: Codex=Executor, Claude=Reviewer
 Scope: Follow-up to H-12 P2-a — log Telegram API-level delivery failures
-Commits: pending
+Commits: 4455ee7
 Changes:
 - Updated `sendTelegramNotification` in `app/control-api/server.js`:
   - now parses Telegram JSON response;
@@ -344,6 +344,6 @@ Open risks:
 - Live Telegram negative-case smoke (invalid token/chat) not executed in production thread.
 Review ask:
 - Confirm that H-12 P2-a is fully closed and failure observability is now sufficient.
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=0
+P1 items: none
+P2 items: none — H-12 P2-a fully closed, EC-2 complete
