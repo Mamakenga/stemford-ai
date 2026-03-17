@@ -431,3 +431,29 @@ Review ask:
 Verdict: P1=0, P2=0
 P1 items: none
 P2 items: none — H-15 P2-a fully closed
+
+---
+
+## H-2026-03-17-17
+Role: Codex=Executor, Claude=Reviewer
+Scope: §29.4.5 Cookbook MVP — add smoke scenarios script
+Commits: pending
+Changes:
+- Added `app/control-api/scripts/smoke_scenarios.sh`:
+  - S1: `GET /tasks` shape check
+  - S2: `POST /tasks` create check
+  - S3: class-A `POST /approvals/request` -> `pending`
+  - S4: stalled watchdog simulation -> `task_stalled_auto_blocked` log
+  - S5: retry cap -> `retry_limit_exceeded`
+  - S6: PMO forbidden financial request -> `403` + `tool_access_denied`
+  - S7: memory cards scenario -> `SKIP` (feature not implemented)
+- Updated `app/control-api/scripts/README.md` with smoke script usage and scenario list.
+Checks:
+- Manual script review: deterministic PASS/FAIL/SKIP summary, non-zero exit on failures.
+Open risks:
+- Script not executed yet in this thread; live run on VPS pending.
+Review ask:
+- Validate script safety/usability for post-deploy smoke and confirm scenario coverage vs §29.4.5.
+Verdict: pending
+P1 items: pending
+P2 items: pending
