@@ -664,7 +664,7 @@ P2 items: none — H-22 P2-a/P2-b fully closed by H-23
 ## H-2026-03-17-24
 Role: Codex=Executor, Claude=Reviewer
 Scope: §29.4.2 Critic pattern MVP (hard-policy layer only)
-Commits: pending
+Commits: 96f46f6
 Changes:
 - Updated `app/control-api/server.js`:
   - new feature flag: `CONTROL_API_ENABLE_HARD_CRITIC` (default `1`);
