@@ -547,6 +547,12 @@ app.post("/tasks/:id/retry", async (req, res) => {
       return fail(res, 409, "invalid_transition_or_not_found", "task not found or retry transition is not allowed");
     }
     if (Number(before.retry_attempt) >= MAX_RETRY_ATTEMPTS) {
+      await writeAction("retry_limit_exceeded", "task", before.id, actor_role, {
+        retry_attempt: Number(before.retry_attempt),
+        max_retry_attempts: MAX_RETRY_ATTEMPTS,
+        reason: reason || null,
+        retry_after: retryAfter || null,
+      });
       return fail(
         res,
         409,
