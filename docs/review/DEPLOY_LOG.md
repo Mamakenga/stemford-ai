@@ -143,3 +143,14 @@ Steps:
 - [x] passed scenarios: `S1..S6`
 - [x] skipped scenarios: `S7` (memory cards not implemented yet, planned in §29.4.3)
 Result: OK
+
+## D-2026-03-17-12
+Handoff: H-2026-03-17-20
+SHA: 62ffc7d (includes `9e81239` actions feed endpoint + skill wiring)
+Steps:
+- [x] git pull
+- [x] migrate: not needed
+- [x] restart `stemford-control-api`
+- [x] smoke: `GET /actions/feed?limit=5&format=human` returns `ok:true` + `HTTP:200`
+- [x] smoke: payload includes `data.format="human"` and non-empty `data.items`
+Result: OK

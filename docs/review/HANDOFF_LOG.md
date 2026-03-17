@@ -540,6 +540,10 @@ Changes:
   - Fast-path Intent C (`покажи лог` / `что произошло` / `последние действия`).
 Checks:
 - `node --check app/control-api/server.js` passed.
+- VPS smoke (2026-03-17):
+  - after `systemctl restart stemford-control-api`
+  - `curl -sS --max-time 5 -w '\nHTTP:%{http_code}\n' 'http://127.0.0.1:3210/actions/feed?limit=5&format=human'`
+  - result: `HTTP:200`, `ok:true`, `data.format:"human"`, `data.count:5`.
 Open risks:
 - Human text mapping is currently heuristic and English-oriented; may need localization tuning for production Telegram responses.
 Review ask:
