@@ -31,19 +31,26 @@ log_pass() { PASS=$((PASS + 1)); echo "PASS: $1"; }
 log_fail() { FAIL=$((FAIL + 1)); echo "FAIL: $1"; }
 log_skip() { SKIP=$((SKIP + 1)); echo "SKIP: $1"; }
 
+sql_literal() {
+  local raw="$1"
+  printf "'%s'" "$(printf "%s" "$raw" | sed "s/'/''/g")"
+}
+
 cleanup_smoke_entities() {
-  local task_id ent_id
+  local task_id ent_id task_id_sql ent_id_sql
   for task_id in "${SMOKE_TASK_IDS[@]}"; do
-    psql "$DB_URL" -v ON_ERROR_STOP=1 -v task_id="$task_id" -c "
-      delete from actions_log where entity_id = :'task_id';
-      delete from tasks where id = :'task_id';
+    task_id_sql="$(sql_literal "$task_id")"
+    psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
+      delete from actions_log where entity_id = ${task_id_sql};
+      delete from tasks where id = ${task_id_sql};
     " >/dev/null 2>&1 || true
   done
 
   for ent_id in "${SMOKE_ENTITY_IDS[@]}"; do
-    psql "$DB_URL" -v ON_ERROR_STOP=1 -v ent_id="$ent_id" -c "
-      delete from actions_log where entity_id = :'ent_id';
-      delete from approval_requests where entity_id = :'ent_id';
+    ent_id_sql="$(sql_literal "$ent_id")"
+    psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
+      delete from actions_log where entity_id = ${ent_id_sql};
+      delete from approval_requests where entity_id = ${ent_id_sql};
     " >/dev/null 2>&1 || true
   done
 }
@@ -105,24 +112,26 @@ scenario_3_class_a_approval() {
 
 scenario_4_watchdog_stalled() {
   local task_id="$1"
+  local task_id_sql
   if [ -z "$task_id" ]; then
     log_fail "S4 stalled watchdog: missing task id"
     return
   fi
 
-  psql "$DB_URL" -v ON_ERROR_STOP=1 -v task_id="$task_id" -c "
+  task_id_sql="$(sql_literal "$task_id")"
+  psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
     update tasks
     set status='in_progress',
         claimed_by='strategy',
         claimed_at=now() - interval '181 minutes'
-    where id = :'task_id';
+    where id = ${task_id_sql};
   " >/dev/null
   ./scripts/stall_watchdog.sh >/dev/null
 
-  if psql "$DB_URL" -At -v task_id="$task_id" -c "
+  if psql "$DB_URL" -At -c "
     select count(*)
     from actions_log
-    where action_type='task_stalled_auto_blocked' and entity_id = :'task_id';
+    where action_type='task_stalled_auto_blocked' and entity_id = ${task_id_sql};
   " | grep -q '^[1-9][0-9]*$'; then
     log_pass "S4 stalled watchdog: blocked + logged"
   else
@@ -132,16 +141,18 @@ scenario_4_watchdog_stalled() {
 
 scenario_5_retry_limit() {
   local task_id="$1"
+  local task_id_sql
   if [ -z "$task_id" ]; then
     log_fail "S5 retry limit: missing task id"
     return
   fi
 
-  psql "$DB_URL" -v ON_ERROR_STOP=1 -v task_id="$task_id" -c "
+  task_id_sql="$(sql_literal "$task_id")"
+  psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
     update tasks
     set status='failed',
         retry_attempt=5
-    where id = :'task_id';
+    where id = ${task_id_sql};
   " >/dev/null
   local resp
   resp="$(curl -sS -X POST "$API_BASE/tasks/${task_id}/retry" \
@@ -157,17 +168,19 @@ scenario_5_retry_limit() {
 
 scenario_6_pmo_forbidden_finance_command() {
   local ent_id resp
+  local ent_id_sql
   ent_id="smoke_forbidden_$(date +%s)"
   SMOKE_ENTITY_IDS+=("$ent_id")
+  ent_id_sql="$(sql_literal "$ent_id")"
   resp="$(curl -sS -X POST "$API_BASE/approvals/request" \
     -H "Content-Type: application/json" \
     -d "{\"action_class\":\"financial_change\",\"entity_type\":\"task\",\"entity_id\":\"${ent_id}\",\"requested_by_role\":\"pmo\",\"reason\":\"smoke forbidden\"}")"
 
   if echo "$resp" | jq -e '.ok == false and .error.code == "forbidden"' >/dev/null; then
-    if psql "$DB_URL" -At -v ent_id="$ent_id" -c "
+    if psql "$DB_URL" -At -c "
       select count(*)
       from actions_log
-      where action_type='tool_access_denied' and entity_id = :'ent_id';
+      where action_type='tool_access_denied' and entity_id = ${ent_id_sql};
     " | grep -q '^[1-9][0-9]*$'; then
       log_pass "S6 pmo forbidden finance command: 403 + actions_log"
     else

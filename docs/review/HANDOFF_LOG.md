@@ -490,3 +490,26 @@ Review ask:
 Verdict: pending
 P1 items: pending
 P2 items: pending
+
+---
+
+## H-2026-03-17-19
+Role: Codex=Executor, Claude=Reviewer
+Scope: Follow-up to H-18 — fix `psql` variable syntax compatibility in smoke script
+Commits: pending
+Changes:
+- Updated `app/control-api/scripts/smoke_scenarios.sh` to replace `:'var'` SQL placeholders (which failed on target VPS `psql`) with safe escaped SQL literals via `sql_literal()` helper.
+- Kept cleanup behavior from H-18 and applied compatibility fix across:
+  - S4 update/check queries,
+  - S5 retry-limit setup query,
+  - S6 audit check query,
+  - cleanup deletes for `tasks` / `approval_requests` / `actions_log`.
+Checks:
+- Static script review: all previous `:'task_id'` / `:'ent_id'` placeholders removed.
+Open risks:
+- Uses escaped SQL literals instead of true prepared statements (safe for current smoke IDs, but still string-based SQL generation).
+Review ask:
+- Confirm compatibility fix and assess whether escaped-literal approach is acceptable for smoke scope.
+Verdict: pending
+P1 items: pending
+P2 items: pending
