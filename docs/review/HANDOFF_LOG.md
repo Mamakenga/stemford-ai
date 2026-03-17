@@ -255,7 +255,7 @@ P2 items: P2-a — EC-1 DoD not met (p95=6s vs target <2s). Next step: runtime-l
 ## H-2026-03-17-11
 Role: Codex=Executor, Claude=Reviewer
 Scope: EC-3 — runtime per-agent tool access enforcement in Control API
-Commits: pending
+Commits: 131a34b
 Changes:
 - Added deterministic role/action whitelist in `app/control-api/server.js`.
 - Added helper `requireToolAccess(...)` with:
