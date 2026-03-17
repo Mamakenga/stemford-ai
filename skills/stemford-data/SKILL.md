@@ -107,6 +107,66 @@ For full request/response schemas with curl examples, read [references/api.md](r
 Respond to Natalia in Russian. Format output as readable summaries, not raw JSON.
 When listing tasks, use a table or bullet list with title, assignee, status, and due date.
 
+## TaskSpecify-lite (29.4.1)
+
+Use this flow for create-task intents like "создай задачу", "добавь задачу", "поставь задачу".
+
+### Step 1: deterministic defaults first
+
+Infer missing fields before asking questions.
+
+Assignee mapping by keywords:
+
+| Keyword group in user text | Assignee |
+|---|---|
+| бюджет, расход, оплата, платеж, выручка, финансы | `finance` |
+| презентация, расписание, встреча, звонок, родители, урок, класс | `pmo` |
+| позиционирование, оффер, бренд, гипотеза, рынок, стратегия | `strategy` |
+| интеграция, доступ, инцидент, инфраструктура, контроль, синхронизация | `orchestrator` |
+
+If no group matches:
+- set draft assignee = `pmo`
+- mark `assignee_confidence = low`
+
+Goal mapping by detected context:
+- if text mentions "позиционирование" or "brief" -> `goal_a_positioning_brief`
+- if text mentions "бренд", "ребрендинг", "rollout" -> `goal_b_brand_rollout`
+- else default -> `stage_c_operations`
+
+Due date default:
+- if user did not provide deadline -> `due_at = null`
+
+Priority default (local drafting only):
+- if user did not provide priority -> `priority = normal`
+- note: Control API `/tasks` has no priority field; do not send this value to API.
+
+### Step 2: one clarifying question only if required
+
+Ask exactly one closed question only when:
+- title is unclear, or
+- assignee confidence is low and wrong assignee is likely.
+
+Use a short forced-choice form:
+- `Это задача для PMO или Strategy?`
+- `Подтверди исполнителя: PMO / Finance / Strategy / Orchestrator`
+
+Do not ask open-ended "какой трекер/формат/контекст?" questions.
+
+### Step 3: always confirm before POST
+
+Before calling `POST /tasks`, always send a compact draft and ask for confirmation:
+
+`Планирую создать задачу: "<title>", исполнитель: <assignee>, goal_id: <goal_id>, срок: <due_at|без срока>, приоритет: <priority>. Ок?`
+
+Only after explicit confirmation (`ок`, `да`, `подтверждаю`) call:
+```bash
+curl -s -X POST http://127.0.0.1:3210/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"title":"...","primary_goal_id":"...","assignee":"...","actor_role":"orchestrator"}'
+```
+
+If user declines, update one field and repeat confirmation.
+
 ## Fast-path Router (EC-1 MVP)
 
 For two frequent read intents, use deterministic fast-path first. Do not ask clarifying questions unless data is missing.

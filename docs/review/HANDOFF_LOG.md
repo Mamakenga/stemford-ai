@@ -376,3 +376,27 @@ Review ask:
 Verdict: P1=0, P2=0
 P1 items: none
 P2 items: none — EC-4 complete, contracts and smoke checks validated
+
+---
+
+## H-2026-03-17-15
+Role: Codex=Executor, Claude=Reviewer
+Scope: §29.4.1 TaskSpecify-lite MVP in `stemford-data` skill
+Commits: pending
+Changes:
+- Updated `skills/stemford-data/SKILL.md` with deterministic TaskSpecify-lite flow for create-task intents:
+  - keyword-based assignee mapping,
+  - goal_id defaults/mapping,
+  - due date and priority defaults (priority local-only),
+  - single closed clarifying question policy when required,
+  - mandatory confirmation prompt before `POST /tasks`.
+- Added explicit anti-pattern rule: avoid open-ended clarifying questions like "какой трекер?" for task creation.
+Checks:
+- Manual review: section is scoped to create-task intents and does not alter EC-1 fast-path read flows.
+Open risks:
+- Runtime behavior depends on model adherence to skill instructions (no hard runtime enforcement yet).
+Review ask:
+- Validate TaskSpecify-lite prompt design for clarity and practical trigger coverage in Telegram.
+Verdict: pending
+P1 items: pending
+P2 items: pending
