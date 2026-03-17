@@ -64,3 +64,15 @@ Steps:
 - [x] smoke: `POST /approvals/request` as `pmo` with `financial_change` returns `403 forbidden`
 - [x] smoke: `actions_log` has `action_type='tool_access_denied'` with `action_key='approvals.request.financial_change'`
 Result: OK
+
+## D-2026-03-17-05
+Handoff: H-2026-03-17-12
+SHA: 287486a (EC-2 webhook alerts for critical events)
+Steps:
+- [x] git pull
+- [x] migrate: not needed
+- [x] restart stemford-control-api
+- [x] smoke: `POST /approvals/request` with explicit approver returns `ok:true`
+- [x] smoke: `POST /tasks/:id/retry` at cap returns `retry_limit_exceeded`
+- [x] smoke: `actions_log` includes `approval_requested`, `task_failed`, `retry_limit_exceeded` for EC-2 test entities
+Result: OK (API + actions_log path verified; Telegram receipt to be confirmed by operator)

@@ -291,7 +291,7 @@ P2 items: none — VPS smoke confirms `403 forbidden` + `tool_access_denied` aud
 ## H-2026-03-17-12
 Role: Codex=Executor, Claude=Reviewer
 Scope: EC-2 — webhook alerts from Control API to Telegram for critical events
-Commits: pending
+Commits: 287486a
 Changes:
 - Added Telegram webhook alert pipeline in `app/control-api/server.js`.
 - Implemented critical event set:
@@ -310,8 +310,15 @@ Changes:
 Checks:
 - `node --check app/control-api/server.js` passed.
 - Manual code review: webhook is best-effort and cannot break API response path.
+- VPS smoke (2026-03-17):
+  - `POST /approvals/request` (internal_write with explicit approver) -> `ok:true`, `approval_id=apr_1773753929929_456k42`.
+  - `POST /tasks/:id/retry` on capped retries -> `error.code=retry_limit_exceeded`.
+  - `actions_log` query confirms all three EC-2 events:
+    - `approval_requested` for `ec2_smoke_approval`
+    - `task_failed` for `tg_1773753961713_lgs0rg`
+    - `retry_limit_exceeded` for `tg_1773753961713_lgs0rg`
 Open risks:
-- VPS smoke pending: requires real event generation + Telegram delivery check.
+- Explicit Telegram receipt confirmation is not captured in this thread log (API + actions_log path is confirmed end-to-end).
 Review ask:
 - Validate EC-2 implementation and review for regressions/risk (notably: no response blocking, no impact on actions_log writes).
 Verdict: pending
