@@ -373,6 +373,6 @@ Open risks:
 - Negative readiness path (`503 unhealthy` when DB is down) was not simulated in production thread.
 Review ask:
 - Validate endpoint contracts against §28.4.4 / EC-4 and confirm no regressions in existing API paths.
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=0
+P1 items: none
+P2 items: none — EC-4 complete, contracts and smoke checks validated
