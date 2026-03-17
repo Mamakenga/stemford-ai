@@ -518,3 +518,32 @@ Review ask:
 Verdict: P1=0, P2=0
 P1 items: none
 P2 items: none — H-17 P2-a/P2-b fully closed via H-18/H-19; VPS smoke PASS=6 FAIL=0 SKIP=1
+
+---
+
+## H-2026-03-17-20
+Role: Codex=Executor, Claude=Reviewer
+Scope: §29.4.6 JSON-log viewer — add `/actions/feed` endpoint + skill/docs wiring
+Commits: pending
+Changes:
+- Added `GET /actions/feed` in `app/control-api/server.js`:
+  - query params: `limit` (default 20, max 100), `format` (`human|json`), optional filters `action_type`, `actor_role`;
+  - `format=json` returns raw `actions_log` rows (including payload);
+  - `format=human` returns feed lines via `toHumanFeedText(...)`.
+- Added helper functions in `server.js`:
+  - `parsePositiveInt(...)` for safe numeric parsing,
+  - `toIsoTimestamp(...)`,
+  - `toHumanFeedText(...)` for readable event text.
+- Updated `skills/stemford-data/references/api.md` with new endpoint contract and curl examples.
+- Updated `skills/stemford-data/SKILL.md`:
+  - quick reference row for `/actions/feed`,
+  - Fast-path Intent C (`покажи лог` / `что произошло` / `последние действия`).
+Checks:
+- `node --check app/control-api/server.js` passed.
+Open risks:
+- Human text mapping is currently heuristic and English-oriented; may need localization tuning for production Telegram responses.
+Review ask:
+- Validate API contract of `/actions/feed` and confirm fast-path wiring in SKILL.md is sufficient for §29.4.6 MVP.
+Verdict: pending
+P1 items: pending
+P2 items: pending

@@ -64,6 +64,54 @@ const ok = (res, data) =>
 const fail = (res, status, code, message) =>
   res.status(status).json({ ok: false, error: { code, message }, meta: { schema_version: "v1", ts: new Date().toISOString() } });
 
+function parsePositiveInt(raw, fallback, maxValue) {
+  const n = Number.parseInt(String(raw || ""), 10);
+  if (!Number.isInteger(n) || n <= 0) return fallback;
+  return Math.min(n, maxValue);
+}
+
+function toIsoTimestamp(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toISOString();
+}
+
+function toHumanFeedText(row) {
+  const payload = row && row.payload && typeof row.payload === "object" ? row.payload : {};
+  const actor = row.actor_role || "system";
+  const stamp = toIsoTimestamp(row.timestamp);
+  const hhmm = stamp ? stamp.slice(11, 16) : "--:--";
+  const target = `${row.entity_type}:${row.entity_id}`;
+
+  switch (row.action_type) {
+    case "task_created":
+      return `[${hhmm}] ${actor} -> created ${row.entity_id}${payload.title ? ` "${payload.title}"` : ""}`;
+    case "task_claimed":
+      return `[${hhmm}] ${actor} -> claimed ${row.entity_id}`;
+    case "task_completed":
+      return `[${hhmm}] ${actor} -> completed ${row.entity_id}`;
+    case "task_failed":
+      return `[${hhmm}] ${actor} -> failed ${row.entity_id}${payload.reason ? ` (${payload.reason})` : ""}`;
+    case "task_retry_queued":
+      return `[${hhmm}] ${actor} -> retry queued ${row.entity_id}${payload.retry_after ? ` (after ${payload.retry_after})` : ""}`;
+    case "retry_limit_exceeded":
+      return `[${hhmm}] ${actor} -> retry limit exceeded ${row.entity_id}`;
+    case "task_stalled_auto_blocked":
+      return `[${hhmm}] ${actor} -> auto-blocked stalled ${row.entity_id}`;
+    case "approval_requested":
+      return `[${hhmm}] ${actor} -> approval requested ${payload.approval_id || row.entity_id}`;
+    case "approval_approved":
+      return `[${hhmm}] ${actor} -> approval approved ${payload.approval_id || row.entity_id}`;
+    case "approval_rejected":
+      return `[${hhmm}] ${actor} -> approval rejected ${payload.approval_id || row.entity_id}`;
+    case "tool_access_denied":
+      return `[${hhmm}] ${actor} -> access denied ${payload.action_key || target}`;
+    default:
+      return `[${hhmm}] ${actor} -> ${row.action_type} ${target}`;
+  }
+}
+
 app.get("/health", (_req, res) => ok(res, { service: "stemford-control-api", PORT }));
 
 app.get("/db/ping", async (_req, res) => {
@@ -281,6 +329,58 @@ app.get("/tasks", async (req, res) => {
       }
     }
     fail(res, 500, "tasks_query_failed", e.message);
+  }
+});
+
+app.get("/actions/feed", async (req, res) => {
+  const format = String(req.query.format || "human").trim().toLowerCase();
+  if (!["human", "json"].includes(format)) {
+    return fail(res, 400, "validation_error", "format must be 'human' or 'json'");
+  }
+
+  const limit = parsePositiveInt(req.query.limit, 20, 100);
+  const where = [];
+  const vals = [];
+
+  if (req.query.action_type) {
+    vals.push(String(req.query.action_type).trim());
+    where.push(`action_type = $${vals.length}`);
+  }
+  if (req.query.actor_role) {
+    vals.push(String(req.query.actor_role).trim());
+    where.push(`actor_role = $${vals.length}`);
+  }
+  vals.push(limit);
+
+  try {
+    const q = await pool.query(
+      `select timestamp,action_type,entity_type,entity_id,actor_role,payload
+       from actions_log
+       ${where.length ? "where " + where.join(" and ") : ""}
+       order by timestamp desc
+       limit $${vals.length}`,
+      vals
+    );
+
+    if (format === "json") {
+      const items = q.rows.map((row) => ({
+        ...row,
+        timestamp: toIsoTimestamp(row.timestamp),
+      }));
+      return ok(res, { count: items.length, format: "json", items });
+    }
+
+    const items = q.rows.map((row) => ({
+      timestamp: toIsoTimestamp(row.timestamp),
+      action_type: row.action_type,
+      entity_type: row.entity_type,
+      entity_id: row.entity_id,
+      actor_role: row.actor_role,
+      text: toHumanFeedText(row),
+    }));
+    return ok(res, { count: items.length, format: "human", items });
+  } catch (e) {
+    return fail(res, 500, "actions_feed_failed", e.message);
   }
 });
 

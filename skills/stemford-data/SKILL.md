@@ -41,6 +41,7 @@ Always check `ok` field before presenting results.
 | Request approval | POST | `/approvals/request` |
 | Pending approvals | GET | `/approvals/pending?approver_role=` |
 | Decide approval | POST | `/approvals/decide` |
+| Actions feed | GET | `/actions/feed?limit=&format=` |
 | Health check | GET | `/health` |
 | DB ping | GET | `/db/ping` |
 
@@ -225,8 +226,30 @@ Response template:
   - Header: `Ожидающие одобрения (N):`
   - Each item: `• <approval_id> — <action_class> — <entity_type>:<entity_id> — approver: <approver_role>`
 
+### Intent C: "show activity log"
+
+Trigger examples:
+- "покажи лог"
+- "что произошло"
+- "лента событий"
+- "последние действия"
+- "actions feed"
+
+Execution:
+1. Run:
+```bash
+curl -s 'http://127.0.0.1:3210/actions/feed?limit=20&format=human'
+```
+2. Read `data.items[*].text` and return up to 20 lines as-is.
+
+Response template:
+- If empty: `Событий пока нет (0).`
+- Else:
+  - Header: `Последние события (N):`
+  - Each item: `• <text>`
+
 ### Fast-path policy
 
-1. For these two intents, do not load `references/api.md` unless API response shape is invalid.
-2. For these two intents, do not switch to broad reasoning: execute API call, format, return.
+1. For these three intents, do not load `references/api.md` unless API response shape is invalid.
+2. For these three intents, do not switch to broad reasoning: execute API call, format, return.
 3. If API returns `ok:false` or transport error, return short error and then fall back to standard skill flow.

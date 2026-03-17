@@ -328,3 +328,35 @@ Example:
 ```bash
 curl -s http://127.0.0.1:3210/diagnostics
 ```
+
+---
+
+## GET /actions/feed
+
+Human-readable or raw feed of latest actions from `actions_log`.
+
+Query params:
+- `limit` (optional, default `20`, max `100`)
+- `format` (optional): `human` (default) or `json`
+- `action_type` (optional): filter by action type
+- `actor_role` (optional): filter by role
+
+Human format example:
+```bash
+curl -s 'http://127.0.0.1:3210/actions/feed?limit=20&format=human'
+```
+
+JSON format example:
+```bash
+curl -s 'http://127.0.0.1:3210/actions/feed?limit=20&format=json'
+```
+
+Response shape:
+- `data.count` - number of returned items
+- `data.format` - `human` or `json`
+- `data.items`:
+  - for `human`: includes `timestamp`, `action_type`, `entity_type`, `entity_id`, `actor_role`, `text`
+  - for `json`: includes raw `payload` from `actions_log`
+
+Validation:
+- invalid `format` returns HTTP `400` with `error.code = "validation_error"`.
