@@ -153,3 +153,23 @@ Review ask:
 Verdict: P1=0, P2=0
 P1 items: none
 P2 items: none — mismatch fully closed
+
+---
+
+## H-2026-03-17-07
+Role: Codex=Executor, Claude=Reviewer
+Scope: Follow-up to Claude P2 from H-04: clarify Finance escalation path
+Commits: pending
+Changes:
+- Updated `agents/finance-kpi/SOUL.md` Role Definition line 6:
+  - from `escalates_to = Human Owner`
+  - to `escalates_via = Orchestrator -> Human Owner`
+Checks:
+- Text check in file confirms escalation path is explicit and consistent with orchestration model.
+Open risks:
+- none
+Review ask:
+- Confirm that this closes the remaining H-04 P2 item (Finance escalation path ambiguity).
+Verdict: pending
+P1 items: pending
+P2 items: pending
