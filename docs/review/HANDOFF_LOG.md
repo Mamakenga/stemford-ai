@@ -575,6 +575,6 @@ Open risks:
 - Timestamp in text remains `HH:MM` from ISO timestamp (UTC-based formatting); if local-time display is required, follow-up conversion may be needed.
 Review ask:
 - Confirm that Russian localization closes H-20 P2-a without API regressions.
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=1
+P1 items: none
+P2 items: timestamp in human feed uses UTC `HH:MM`; backlog for user-local time formatting (minor UX)
