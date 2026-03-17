@@ -24,10 +24,31 @@ PASS=0
 FAIL=0
 SKIP=0
 TASK_ID=""
+declare -a SMOKE_TASK_IDS=()
+declare -a SMOKE_ENTITY_IDS=()
 
 log_pass() { PASS=$((PASS + 1)); echo "PASS: $1"; }
 log_fail() { FAIL=$((FAIL + 1)); echo "FAIL: $1"; }
 log_skip() { SKIP=$((SKIP + 1)); echo "SKIP: $1"; }
+
+cleanup_smoke_entities() {
+  local task_id ent_id
+  for task_id in "${SMOKE_TASK_IDS[@]}"; do
+    psql "$DB_URL" -v ON_ERROR_STOP=1 -v task_id="$task_id" -c "
+      delete from actions_log where entity_id = :'task_id';
+      delete from tasks where id = :'task_id';
+    " >/dev/null 2>&1 || true
+  done
+
+  for ent_id in "${SMOKE_ENTITY_IDS[@]}"; do
+    psql "$DB_URL" -v ON_ERROR_STOP=1 -v ent_id="$ent_id" -c "
+      delete from actions_log where entity_id = :'ent_id';
+      delete from approval_requests where entity_id = :'ent_id';
+    " >/dev/null 2>&1 || true
+  done
+}
+
+trap cleanup_smoke_entities EXIT
 
 scenario_1_open_tasks() {
   local resp
@@ -59,6 +80,7 @@ scenario_2_create_task() {
   local created_task_id
   if created_task_id="$(create_smoke_task)"; then
     TASK_ID="$created_task_id"
+    SMOKE_TASK_IDS+=("$created_task_id")
     log_pass "S2 create task (Guarded): task created"
   else
     log_fail "S2 create task (Guarded): create failed"
@@ -69,6 +91,7 @@ scenario_2_create_task() {
 scenario_3_class_a_approval() {
   local ent_id resp
   ent_id="smoke_class_a_$(date +%s)"
+  SMOKE_ENTITY_IDS+=("$ent_id")
   resp="$(curl -sS -X POST "$API_BASE/approvals/request" \
     -H "Content-Type: application/json" \
     -d "{\"action_class\":\"financial_change\",\"entity_type\":\"task\",\"entity_id\":\"${ent_id}\",\"requested_by_role\":\"orchestrator\",\"reason\":\"smoke class A\"}")"
@@ -87,10 +110,20 @@ scenario_4_watchdog_stalled() {
     return
   fi
 
-  psql "$DB_URL" -v ON_ERROR_STOP=1 -c "update tasks set status='in_progress', claimed_by='strategy', claimed_at=now() - interval '181 minutes' where id='${task_id}';" >/dev/null
+  psql "$DB_URL" -v ON_ERROR_STOP=1 -v task_id="$task_id" -c "
+    update tasks
+    set status='in_progress',
+        claimed_by='strategy',
+        claimed_at=now() - interval '181 minutes'
+    where id = :'task_id';
+  " >/dev/null
   ./scripts/stall_watchdog.sh >/dev/null
 
-  if psql "$DB_URL" -At -c "select count(*) from actions_log where action_type='task_stalled_auto_blocked' and entity_id='${task_id}';" | grep -q '^1\|^[2-9][0-9]*$'; then
+  if psql "$DB_URL" -At -v task_id="$task_id" -c "
+    select count(*)
+    from actions_log
+    where action_type='task_stalled_auto_blocked' and entity_id = :'task_id';
+  " | grep -q '^[1-9][0-9]*$'; then
     log_pass "S4 stalled watchdog: blocked + logged"
   else
     log_fail "S4 stalled watchdog: expected task_stalled_auto_blocked log"
@@ -104,7 +137,12 @@ scenario_5_retry_limit() {
     return
   fi
 
-  psql "$DB_URL" -v ON_ERROR_STOP=1 -c "update tasks set status='failed', retry_attempt=5 where id='${task_id}';" >/dev/null
+  psql "$DB_URL" -v ON_ERROR_STOP=1 -v task_id="$task_id" -c "
+    update tasks
+    set status='failed',
+        retry_attempt=5
+    where id = :'task_id';
+  " >/dev/null
   local resp
   resp="$(curl -sS -X POST "$API_BASE/tasks/${task_id}/retry" \
     -H "Content-Type: application/json" \
@@ -120,12 +158,17 @@ scenario_5_retry_limit() {
 scenario_6_pmo_forbidden_finance_command() {
   local ent_id resp
   ent_id="smoke_forbidden_$(date +%s)"
+  SMOKE_ENTITY_IDS+=("$ent_id")
   resp="$(curl -sS -X POST "$API_BASE/approvals/request" \
     -H "Content-Type: application/json" \
     -d "{\"action_class\":\"financial_change\",\"entity_type\":\"task\",\"entity_id\":\"${ent_id}\",\"requested_by_role\":\"pmo\",\"reason\":\"smoke forbidden\"}")"
 
   if echo "$resp" | jq -e '.ok == false and .error.code == "forbidden"' >/dev/null; then
-    if psql "$DB_URL" -At -c "select count(*) from actions_log where action_type='tool_access_denied' and entity_id='${ent_id}';" | grep -q '^1\|^[2-9][0-9]*$'; then
+    if psql "$DB_URL" -At -v ent_id="$ent_id" -c "
+      select count(*)
+      from actions_log
+      where action_type='tool_access_denied' and entity_id = :'ent_id';
+    " | grep -q '^[1-9][0-9]*$'; then
       log_pass "S6 pmo forbidden finance command: 403 + actions_log"
     else
       log_fail "S6 pmo forbidden finance command: missing tool_access_denied log"

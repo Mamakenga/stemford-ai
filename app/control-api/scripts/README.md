@@ -12,6 +12,7 @@
 ## Smoke Scenarios (§29.4.5)
 - run cookbook smoke: `bash ./scripts/smoke_scenarios.sh`
 - exits non-zero if any scenario fails
+- auto-cleans created smoke entities (`tasks`, `approval_requests`, `actions_log`) at script exit
 - current coverage:
   - S1 tasks read
   - S2 task create

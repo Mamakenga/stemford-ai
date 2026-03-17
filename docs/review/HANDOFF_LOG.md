@@ -459,6 +459,34 @@ Open risks:
 - Script creates smoke entities in production DB (safe, but accumulates `smoke_*` records over time).
 Review ask:
 - Validate script safety/usability for post-deploy smoke and confirm scenario coverage vs §29.4.5.
+Verdict: P1=0, P2=2
+P1 items: none
+P2 items:
+- Parameterize SQL in smoke script (`where id='${task_id}'` style interpolation).
+- Add cleanup section to avoid smoke-data accumulation in production DB.
+
+---
+
+## H-2026-03-17-18
+Role: Codex=Executor, Claude=Reviewer
+Scope: Follow-up to H-17 P2-a/P2-b — SQL parameterization + smoke cleanup
+Commits: pending
+Changes:
+- Updated `app/control-api/scripts/smoke_scenarios.sh`:
+  - replaced direct SQL interpolation with parameterized `psql -v ...` variables for task/entity IDs;
+  - added `cleanup_smoke_entities()` and `trap ... EXIT` to remove created smoke data from:
+    - `tasks`
+    - `approval_requests`
+    - `actions_log`
+  - tracked created IDs in arrays (`SMOKE_TASK_IDS`, `SMOKE_ENTITY_IDS`) so cleanup is scoped to current run.
+- Updated `app/control-api/scripts/README.md` to document automatic smoke cleanup.
+Checks:
+- Manual script review: no raw task/entity ID interpolation remains in SQL queries.
+- Manual script review: cleanup is best-effort (`|| true`) and runs on normal exit and failures.
+Open risks:
+- Cleanup covers entities created by this script run; old historical `smoke_*` rows from earlier runs remain untouched.
+Review ask:
+- Confirm that H-17 P2-a/P2-b are fully closed and cleanup scope is acceptable.
 Verdict: pending
 P1 items: pending
 P2 items: pending
