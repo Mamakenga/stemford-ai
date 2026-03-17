@@ -201,3 +201,15 @@ Steps:
 - [x] smoke summary: `PASS=8 FAIL=0 SKIP=0`
 - [x] S8 passed: class-A approval request without reason -> `critic_policy_denied` + `actions_log`
 Result: OK
+
+## D-2026-03-17-17
+Handoff: H-2026-03-17-25
+SHA: 2665095 (includes `42c4c6f` Guarded-profile protocol + S9 smoke)
+Steps:
+- [x] git pull
+- [x] migrate: not needed
+- [x] restart `stemford-control-api`
+- [x] run `bash ./scripts/smoke_scenarios.sh`
+- [x] smoke summary: `PASS=9 FAIL=0 SKIP=0`
+- [x] S9 passed: `/critic/check` deny path (`critic_reason_required`) + allow path (`tasks.write`)
+Result: OK

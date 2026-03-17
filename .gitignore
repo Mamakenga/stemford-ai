@@ -12,3 +12,6 @@ app/control-api/node_modules/
 # OS junk
 .DS_Store
 Thumbs.db
+
+# Local AI tool settings
+.claude/
