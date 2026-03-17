@@ -124,6 +124,11 @@ Assignee mapping by keywords:
 | позиционирование, оффер, бренд, гипотеза, рынок, стратегия | `strategy` |
 | интеграция, доступ, инцидент, инфраструктура, контроль, синхронизация | `orchestrator` |
 
+Conflict resolution (required):
+- if multiple groups match, use the first matched group by table order (top to bottom).
+- do not ask extra questions for tie-break only; keep deterministic behavior.
+- example: "бюджет на презентацию" -> `finance` (finance group is above pmo).
+
 If no group matches:
 - set draft assignee = `pmo`
 - mark `assignee_confidence = low`

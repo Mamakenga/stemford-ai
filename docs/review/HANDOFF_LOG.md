@@ -404,6 +404,27 @@ Open risks:
 - Latency remains high (~2 minutes in latest smoke) despite correct TaskSpecify-lite behavior.
 Review ask:
 - Validate TaskSpecify-lite behavior after session-reset mitigation and assess whether latency should be tracked as separate P2/OI item.
+Verdict: P1=0, P2=1
+P1 items: none
+P2 items: add deterministic conflict-resolution rule for multi-match keyword cases (closed in H-16)
+
+---
+
+## H-2026-03-17-16
+Role: Codex=Executor, Claude=Reviewer
+Scope: Follow-up to H-15 P2-a — deterministic assignee conflict resolution
+Commits: pending
+Changes:
+- Updated `skills/stemford-data/SKILL.md` TaskSpecify-lite section:
+  - added explicit tie-break rule when multiple keyword groups match;
+  - deterministic policy: first matched group by table order wins;
+  - added example: "бюджет на презентацию" -> `finance`.
+Checks:
+- Manual review: conflict resolution is now explicit and deterministic; no effect on existing fast-path read intents.
+Open risks:
+- Runtime behavior still depends on skill adherence in model/session context.
+Review ask:
+- Confirm that H-15 P2-a is fully closed with the new deterministic tie-break rule.
 Verdict: pending
 P1 items: pending
 P2 items: pending
