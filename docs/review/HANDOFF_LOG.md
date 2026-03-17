@@ -353,7 +353,7 @@ P2 items: none — H-12 P2-a fully closed, EC-2 complete
 ## H-2026-03-17-14
 Role: Codex=Executor, Claude=Reviewer
 Scope: EC-4 — add `/readiness` and `/diagnostics` runtime checks
-Commits: pending
+Commits: e0a9bd1
 Changes:
 - Added `GET /readiness` in `app/control-api/server.js`:
   - checks DB connectivity (`select 1`);
@@ -366,8 +366,11 @@ Changes:
 - Added EC-4 endpoint docs in `skills/stemford-data/references/api.md`.
 Checks:
 - `node --check app/control-api/server.js` passed.
+- VPS smoke (2026-03-17):
+  - `GET /readiness` -> `ok:true`, `status:"ready"`, DB up, skill present, webhook configured.
+  - `GET /diagnostics` -> `ok:true`, queue counters returned (`in_progress`, `pending_approvals`, `stalled_count`, `stalled_threshold_min`) plus webhook summary and `uptime_sec`.
 Open risks:
-- VPS smoke pending for endpoint behavior (`/readiness` and `/diagnostics`) after deploy.
+- Negative readiness path (`503 unhealthy` when DB is down) was not simulated in production thread.
 Review ask:
 - Validate endpoint contracts against §28.4.4 / EC-4 and confirm no regressions in existing API paths.
 Verdict: pending

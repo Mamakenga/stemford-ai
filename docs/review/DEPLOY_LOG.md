@@ -86,3 +86,14 @@ Steps:
 - [x] restart stemford-control-api
 - [x] smoke: `systemctl is-active stemford-control-api` -> `active`
 Result: OK
+
+## D-2026-03-17-07
+Handoff: H-2026-03-17-14
+SHA: e0a9bd1 (EC-4 readiness/diagnostics endpoints)
+Steps:
+- [x] git pull
+- [x] migrate: not needed
+- [x] restart stemford-control-api
+- [x] smoke: `GET /readiness` returns `ok:true` + `status:"ready"`
+- [x] smoke: `GET /diagnostics` returns `ok:true` + queue/webhook/uptime fields
+Result: OK
