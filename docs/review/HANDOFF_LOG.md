@@ -515,6 +515,6 @@ Open risks:
 - Uses escaped SQL literals instead of true prepared statements (safe for current smoke IDs, but still string-based SQL generation).
 Review ask:
 - Confirm compatibility fix and assess whether escaped-literal approach is acceptable for smoke scope.
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=0
+P1 items: none
+P2 items: none — H-17 P2-a/P2-b fully closed via H-18/H-19; VPS smoke PASS=6 FAIL=0 SKIP=1
