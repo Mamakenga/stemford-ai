@@ -84,7 +84,7 @@ P2 items: none
 ## H-2026-03-17-04
 Role: Codex=Executor, Claude=Reviewer
 Scope: OI-6 — formalize Role Definition (6 fields) in agent SOUL files
-Commits: pending
+Commits: 87d3d3d
 Changes:
 - Added explicit `Role Definition (6 полей)` blocks to all role profiles:
   - `agents/orchestrator/SOUL.md`
