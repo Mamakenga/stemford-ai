@@ -284,3 +284,47 @@ Returns `{ ok: true, data: { service: "stemford-control-api", PORT: 3210 } }`.
 ## GET /db/ping
 
 Returns `{ ok: true, data: { db: "up", ts: "..." } }` if database is reachable.
+
+## GET /readiness
+
+Readiness check for runtime dependencies.
+
+Healthy response:
+```json
+{
+  "ok": true,
+  "data": {
+    "status": "ready",
+    "checks": {
+      "db": { "status": "up" },
+      "stemford_skill": { "status": "present", "path": "/opt/stemford/skills/stemford-data/SKILL.md" },
+      "telegram_webhook": { "enabled": true, "configured": true, "chat_ids": 1 }
+    }
+  }
+}
+```
+
+Unhealthy response (DB down): HTTP `503`, `ok:false`, `data.status="unhealthy"`.
+
+Notes:
+- DB status is the gating signal for readiness.
+- Skill/webhook checks are included for operator visibility.
+
+---
+
+## GET /diagnostics
+
+Returns runtime counters for operations monitoring.
+
+Fields:
+- `queue.in_progress` — tasks currently in work
+- `queue.pending_approvals` — approvals waiting decision
+- `queue.stalled_count` — in_progress tasks older than watchdog threshold
+- `queue.stalled_threshold_min` — threshold used for stalled detection
+- `webhook.enabled/configured/chat_ids` — current webhook config status
+- `uptime_sec` — process uptime in seconds
+
+Example:
+```bash
+curl -s http://127.0.0.1:3210/diagnostics
+```

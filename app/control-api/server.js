@@ -1,4 +1,5 @@
 const express = require("express");
+const fs = require("fs");
 const { Pool } = require("pg");
 const dotenv = require("dotenv");
 
@@ -10,6 +11,13 @@ const MAX_RETRY_ATTEMPTS = (() => {
 })();
 const CONTROL_API_ENFORCE_TOOL_ACCESS = String(process.env.CONTROL_API_ENFORCE_TOOL_ACCESS || "1") !== "0";
 const CONTROL_API_TELEGRAM_WEBHOOK_ENABLED = String(process.env.CONTROL_API_TELEGRAM_WEBHOOK_ENABLED || "1") !== "0";
+const STALL_WATCHDOG_THRESHOLD_MIN = (() => {
+  const raw = Number(process.env.STALL_WATCHDOG_THRESHOLD_MIN || 120);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 120;
+})();
+const STEMFORD_SKILL_PATH = String(
+  process.env.CONTROL_API_STEMFORD_SKILL_PATH || "/opt/stemford/skills/stemford-data/SKILL.md"
+);
 
 function parseChatIds(raw) {
   return String(raw || "")
@@ -64,6 +72,81 @@ app.get("/db/ping", async (_req, res) => {
     ok(res, { db: "up", ts: r.rows[0].ts });
   } catch (e) {
     fail(res, 500, "db_down", e.message);
+  }
+});
+
+app.get("/readiness", async (_req, res) => {
+  let dbUp = false;
+  let dbError = null;
+  try {
+    await pool.query("select 1");
+    dbUp = true;
+  } catch (e) {
+    dbError = e.message;
+  }
+
+  const skillPresent = fs.existsSync(STEMFORD_SKILL_PATH);
+  const webhookConfigured = !!TELEGRAM_NOTIFY_TOKEN && TELEGRAM_NOTIFY_CHAT_IDS.length > 0;
+
+  const checks = {
+    db: dbUp ? { status: "up" } : { status: "down", error: dbError },
+    stemford_skill: { status: skillPresent ? "present" : "missing", path: STEMFORD_SKILL_PATH },
+    telegram_webhook: {
+      enabled: CONTROL_API_TELEGRAM_WEBHOOK_ENABLED,
+      configured: webhookConfigured,
+      chat_ids: TELEGRAM_NOTIFY_CHAT_IDS.length,
+    },
+  };
+
+  if (dbUp) {
+    return ok(res, { status: "ready", checks });
+  }
+
+  return res.status(503).json({
+    ok: false,
+    data: { status: "unhealthy", checks },
+    meta: { schema_version: "v1", ts: new Date().toISOString() },
+  });
+});
+
+app.get("/diagnostics", async (_req, res) => {
+  try {
+    const q = await pool.query(
+      `
+      select
+        (select count(*)::int from tasks where status = 'in_progress') as in_progress,
+        (select count(*)::int from approval_requests where status = 'pending') as pending_approvals,
+        (
+          select count(*)::int
+          from tasks
+          where status = 'in_progress'
+            and claimed_at is not null
+            and claimed_at < now() - ($1::text || ' minutes')::interval
+        ) as stalled_count
+      `,
+      [STALL_WATCHDOG_THRESHOLD_MIN]
+    );
+
+    const row = q.rows[0] || { in_progress: 0, pending_approvals: 0, stalled_count: 0 };
+    const webhookConfigured = !!TELEGRAM_NOTIFY_TOKEN && TELEGRAM_NOTIFY_CHAT_IDS.length > 0;
+
+    return ok(res, {
+      status: "ok",
+      queue: {
+        in_progress: row.in_progress,
+        pending_approvals: row.pending_approvals,
+        stalled_count: row.stalled_count,
+        stalled_threshold_min: STALL_WATCHDOG_THRESHOLD_MIN,
+      },
+      webhook: {
+        enabled: CONTROL_API_TELEGRAM_WEBHOOK_ENABLED,
+        configured: webhookConfigured,
+        chat_ids: TELEGRAM_NOTIFY_CHAT_IDS.length,
+      },
+      uptime_sec: Math.floor(process.uptime()),
+    });
+  } catch (e) {
+    return fail(res, 500, "diagnostics_failed", e.message);
   }
 });
 

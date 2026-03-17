@@ -347,3 +347,29 @@ Review ask:
 Verdict: P1=0, P2=0
 P1 items: none
 P2 items: none — H-12 P2-a fully closed, EC-2 complete
+
+---
+
+## H-2026-03-17-14
+Role: Codex=Executor, Claude=Reviewer
+Scope: EC-4 — add `/readiness` and `/diagnostics` runtime checks
+Commits: pending
+Changes:
+- Added `GET /readiness` in `app/control-api/server.js`:
+  - checks DB connectivity (`select 1`);
+  - reports skill file presence (`/opt/stemford/skills/stemford-data/SKILL.md`, overridable by env);
+  - reports Telegram webhook config state.
+- Added `GET /diagnostics` in `app/control-api/server.js`:
+  - `in_progress`, `pending_approvals`, `stalled_count`, `stalled_threshold_min`;
+  - webhook config summary;
+  - process `uptime_sec`.
+- Added EC-4 endpoint docs in `skills/stemford-data/references/api.md`.
+Checks:
+- `node --check app/control-api/server.js` passed.
+Open risks:
+- VPS smoke pending for endpoint behavior (`/readiness` and `/diagnostics`) after deploy.
+Review ask:
+- Validate endpoint contracts against §28.4.4 / EC-4 and confirm no regressions in existing API paths.
+Verdict: pending
+P1 items: pending
+P2 items: pending
