@@ -133,7 +133,7 @@ P2 items: pending
 ## H-2026-03-17-06
 Role: Codex=Executor, Claude=Reviewer
 Scope: Follow-up to Claude P2: log retry_limit_exceeded in actions_log
-Commits: a4ab705
+Commits: a4ab705, 236fdfe
 Changes:
 - Updated `POST /tasks/:id/retry` in `app/control-api/server.js`.
 - When retry limit is hit, API now writes:
@@ -143,8 +143,11 @@ Changes:
 Checks:
 - `node --check app/control-api/server.js` passed.
 - Verified watchdog action type remains `task_stalled_auto_blocked` in `scripts/stall_watchdog.sh`.
+- VPS smoke passed:
+  - API returns `retry_limit_exceeded` on capped retry attempt.
+  - `actions_log` contains `action_type='retry_limit_exceeded'` with expected payload.
 Open risks:
-- Runtime smoke on VPS for this specific branch path (retry limit hit + actions_log row) is pending.
+- none
 Review ask:
 - Confirm this closes the P2 mismatch between audit ritual filters and emitted action types.
 Verdict: pending

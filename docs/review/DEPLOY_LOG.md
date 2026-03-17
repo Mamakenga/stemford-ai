@@ -42,3 +42,14 @@ Steps:
 - [x] restart stemford-control-api
 - [x] smoke: timer active, service exits 0/SUCCESS
 Result: OK
+
+## D-2026-03-17-03
+Handoff: H-2026-03-17-06
+SHA: 236fdfe (includes a4ab705 runtime fix + H-06 log finalize)
+Steps:
+- [x] git pull
+- [x] migrate: not needed
+- [x] restart stemford-control-api
+- [x] smoke: POST /tasks/:id/retry returns `retry_limit_exceeded` at cap
+- [x] smoke: `actions_log` has `action_type='retry_limit_exceeded'` with payload
+Result: OK
