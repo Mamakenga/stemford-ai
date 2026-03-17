@@ -567,6 +567,10 @@ Changes:
 - Kept endpoint contract unchanged (`GET /actions/feed`, same fields/shape).
 Checks:
 - `node --check app/control-api/server.js` passed.
+- VPS smoke (2026-03-17):
+  - `systemctl restart stemford-control-api`
+  - `curl -sS --max-time 5 -w '\nHTTP:%{http_code}\n' 'http://127.0.0.1:3210/actions/feed?limit=5&format=human'`
+  - result: `HTTP:200`, `ok:true`, human `text` lines are localized in Russian.
 Open risks:
 - Timestamp in text remains `HH:MM` from ISO timestamp (UTC-based formatting); if local-time display is required, follow-up conversion may be needed.
 Review ask:

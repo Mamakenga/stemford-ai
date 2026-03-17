@@ -154,3 +154,14 @@ Steps:
 - [x] smoke: `GET /actions/feed?limit=5&format=human` returns `ok:true` + `HTTP:200`
 - [x] smoke: payload includes `data.format="human"` and non-empty `data.items`
 Result: OK
+
+## D-2026-03-17-13
+Handoff: H-2026-03-17-21
+SHA: 0e1c8b7 (includes `ad94b28` Russian localization for human feed text)
+Steps:
+- [x] git pull
+- [x] migrate: not needed
+- [x] restart `stemford-control-api`
+- [x] smoke: `GET /actions/feed?limit=5&format=human` returns `HTTP:200`, `ok:true`
+- [x] smoke: `data.items[*].text` localized in Russian (`запросил одобрение`, `создал`, `доступ запрещён`, `достиг лимита повторов`)
+Result: OK
