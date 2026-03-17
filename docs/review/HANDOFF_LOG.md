@@ -702,6 +702,6 @@ Open risks:
 Review ask:
 - Validate hard-critic policy boundaries (false-positive/false-negative risk) and confirm class-A reason rule is acceptable.
 - Validate `/critic/check` contract and audit trail (`critic_policy_denied`) semantics.
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=0
+P1 items: none
+P2 items: none — hard-policy critic MVP accepted, S8 smoke pass confirmed

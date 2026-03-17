@@ -188,3 +188,16 @@ Steps:
 - [x] first smoke attempt failed with transient connect race (`curl: (7)` right after restart)
 - [x] smoke rerun after short wait: `PASS=7 FAIL=0 SKIP=0`
 Result: OK
+
+## D-2026-03-17-16
+Handoff: H-2026-03-17-24
+SHA: 3757cb3 (includes `96f46f6` hard-policy critic MVP + S8 smoke)
+Steps:
+- [x] git pull
+- [x] migrate: not needed
+- [x] restart `stemford-control-api`
+- [x] wait 3s to avoid restart race
+- [x] run `bash ./scripts/smoke_scenarios.sh`
+- [x] smoke summary: `PASS=8 FAIL=0 SKIP=0`
+- [x] S8 passed: class-A approval request without reason -> `critic_policy_denied` + `actions_log`
+Result: OK
