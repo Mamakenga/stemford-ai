@@ -470,7 +470,7 @@ P2 items:
 ## H-2026-03-17-18
 Role: Codex=Executor, Claude=Reviewer
 Scope: Follow-up to H-17 P2-a/P2-b — SQL parameterization + smoke cleanup
-Commits: pending
+Commits: e90efca
 Changes:
 - Updated `app/control-api/scripts/smoke_scenarios.sh`:
   - replaced direct SQL interpolation with parameterized `psql -v ...` variables for task/entity IDs;
