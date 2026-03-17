@@ -267,8 +267,8 @@ async function sendTelegramNotification(text) {
   if (!TELEGRAM_NOTIFY_TOKEN || TELEGRAM_NOTIFY_CHAT_IDS.length === 0) return;
 
   const endpoint = `https://api.telegram.org/bot${TELEGRAM_NOTIFY_TOKEN}/sendMessage`;
-  const jobs = TELEGRAM_NOTIFY_CHAT_IDS.map((chatId) =>
-    fetch(endpoint, {
+  const jobs = TELEGRAM_NOTIFY_CHAT_IDS.map(async (chatId) => {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -276,13 +276,29 @@ async function sendTelegramNotification(text) {
         text,
         disable_web_page_preview: true,
       }),
-    })
-  );
+    });
+
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+
+    const telegramRejected = payload && payload.ok === false;
+    if (!response.ok || telegramRejected) {
+      const description =
+        (payload && payload.description ? String(payload.description) : "") ||
+        `HTTP ${response.status}`;
+      throw new Error(`chat_id=${chatId} ${description}`);
+    }
+  });
 
   const results = await Promise.allSettled(jobs);
   const failed = results.filter((r) => r.status === "rejected");
   if (failed.length > 0) {
-    console.warn(`telegram webhook send failed: ${failed.length}/${results.length}`);
+    const reasons = failed.map((r) => String(r.reason && r.reason.message ? r.reason.message : r.reason));
+    console.warn(`telegram webhook send failed: ${failed.length}/${results.length}; ${reasons.join(" | ")}`);
   }
 }
 

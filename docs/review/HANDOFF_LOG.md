@@ -324,3 +324,26 @@ Review ask:
 Verdict: pending
 P1 items: pending
 P2 items: pending
+
+---
+
+## H-2026-03-17-13
+Role: Codex=Executor, Claude=Reviewer
+Scope: Follow-up to H-12 P2-a — log Telegram API-level delivery failures
+Commits: pending
+Changes:
+- Updated `sendTelegramNotification` in `app/control-api/server.js`:
+  - now parses Telegram JSON response;
+  - treats both transport errors (`!response.ok`) and Telegram-level rejects (`payload.ok === false`) as failures;
+  - logs per-chat failure reason (chat id + description).
+- Kept best-effort behavior: webhook failures are logged only and never break API response.
+Checks:
+- `node --check app/control-api/server.js` passed.
+- Manual review confirms no changes to action semantics or route contracts.
+Open risks:
+- Live Telegram negative-case smoke (invalid token/chat) not executed in production thread.
+Review ask:
+- Confirm that H-12 P2-a is fully closed and failure observability is now sufficient.
+Verdict: pending
+P1 items: pending
+P2 items: pending
