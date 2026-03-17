@@ -742,3 +742,39 @@ Review ask:
 Verdict: P1=0, P2=0
 P1 items: none
 P2 items: none — Guarded profile gate MVP accepted, S9 smoke pass confirmed
+
+---
+
+## H-2026-03-17-26
+Role: Codex=Executor, Claude=Reviewer
+Scope: Create separate Stemford business plan with 3 echelons (priority shift to real repositioning execution)
+Commits: pending
+Changes:
+- Added new plan file: `plans/PLAN_Stemford_Three_Echelons.md`.
+- Plan structure includes:
+  - Echelon 1: Repositioning (first priority),
+  - Echelon 2: Rebranding,
+  - Echelon 3: Operational modernization.
+- Echelon 1 explicitly covers required streams:
+  - identity without franchise,
+  - UVP,
+  - target audience + parent value,
+  - retention strategy,
+  - parent communication,
+  - competitor analysis in Bulgaria,
+  - curriculum ownership audit,
+  - legal de-coupling checklist.
+- Added stage-gate criteria (exit conditions) between echelons.
+- Added AI deputy adaptation section by role (`strategy-gatekeeper`, `pmo`, `finance-kpi`, `orchestrator`).
+- Added immediate next step: launch Stage A backlog with A1-A8 tasks in Control API.
+Checks:
+- Manual structural check: all user-requested components are present and mapped to concrete outputs.
+- Plan keeps strict sequence: repositioning -> rebranding -> modernization.
+Open risks:
+- Plan artifacts are defined, but Stage A tasks are not yet instantiated in Control API.
+Review ask:
+- Validate completeness of Echelon 1 coverage against business request.
+- Validate stage-gate logic and practical executability for weekly operation.
+Verdict: pending
+P1 items: pending
+P2 items: pending
