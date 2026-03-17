@@ -53,3 +53,14 @@ Steps:
 - [x] smoke: POST /tasks/:id/retry returns `retry_limit_exceeded` at cap
 - [x] smoke: `actions_log` has `action_type='retry_limit_exceeded'` with payload
 Result: OK
+
+## D-2026-03-17-04
+Handoff: H-2026-03-17-11
+SHA: 5779191 (EC-3 runtime tool access enforcement)
+Steps:
+- [x] git pull
+- [x] migrate: not needed
+- [x] restart stemford-control-api
+- [x] smoke: `POST /approvals/request` as `pmo` with `financial_change` returns `403 forbidden`
+- [x] smoke: `actions_log` has `action_type='tool_access_denied'` with `action_key='approvals.request.financial_change'`
+Result: OK
