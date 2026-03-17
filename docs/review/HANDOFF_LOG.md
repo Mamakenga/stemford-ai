@@ -199,6 +199,6 @@ Open risks:
 - This is skill-level routing (instructional). Runtime latency improvement depends on model/tool execution behavior and requires smoke in live Telegram.
 Review ask:
 - Confirm trigger set and response templates are sufficient for EC-1 DoD before runtime smoke.
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=1
+P1 items: none
+P2 items: P2-a — expand Intent A triggers: add «какие задачи», «список задач», «задачи» (bare form) to increase fast-path hit rate toward >40% DoD target
