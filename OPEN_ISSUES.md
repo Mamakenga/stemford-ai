@@ -20,10 +20,11 @@
 - Подтверждение:
   - код в `main` (включая `app/control-api/systemd/*` и fallback в `app/control-api/server.js`);
   - runtime-проверка на VPS: `stemford-stall-watchdog.timer` активен, `stemford-stall-watchdog.service` отрабатывает с `status=0/SUCCESS`.
+  - `OI-6`: Role Definition (6 полей) формализован в `agents/*/SOUL.md`.
+  - `OI-7`: ритуал ревью `actions_log` формализован в `docs/review/AUDIT_LOG_REVIEW_RITUAL.md`.
 
 ### P2 backlog — из анализа книги Headcount Zero
 
 | # | Задача | Контекст | Этап |
 |---|--------|----------|------|
-| OI-6 | Формализовать Authority / Boundaries для каждого агента | Книга гл.8: у каждой роли должны быть «что решает сам» и «что запрещено». В agents/*/SOUL.md это размыто | Этап 4 (команда агентов) |
-| OI-7 | Ритуал ревью audit logs | Книга гл.9: еженедельно 30 мин просмотр actions_log на аномалии + ежемесячный deep dive по одному агенту | Этап 5 (наблюдаемость) |
+| — | Нет открытых P2 по блоку Headcount Zero | OI-6 и OI-7 закрыты и перенесены в done-блок выше | — |

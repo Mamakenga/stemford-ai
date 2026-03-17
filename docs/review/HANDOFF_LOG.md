@@ -101,3 +101,29 @@ Review ask:
 Verdict: pending
 P1 items: pending
 P2 items: pending
+
+---
+
+## H-2026-03-17-05
+Role: Codex=Executor, Claude=Reviewer
+Scope: OI-7 - formalize actions_log review ritual (weekly/monthly/exception)
+Commits: pending
+Changes:
+- Added `docs/review/AUDIT_LOG_REVIEW_RITUAL.md` with:
+  - weekly 30-min review flow;
+  - monthly deep dive flow per agent;
+  - exception-based immediate review triggers;
+  - ready-to-run SQL commands for actions_log and tasks.
+- Updated `OPEN_ISSUES.md`:
+  - moved OI-6/OI-7 to done context;
+  - marked Headcount Zero P2 backlog as no open items.
+Checks:
+- File presence check for `docs/review/AUDIT_LOG_REVIEW_RITUAL.md`.
+- Manual content check: cadence + commands + output format present.
+Open risks:
+- First weekly run by operations team is not yet executed (process defined, first execution pending).
+Review ask:
+- Confirm that ritual scope is sufficient for Stage 5 observability and that exception triggers are correct.
+Verdict: pending
+P1 items: pending
+P2 items: pending
