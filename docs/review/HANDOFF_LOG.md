@@ -548,6 +548,6 @@ Open risks:
 - Human text mapping is currently heuristic and English-oriented; may need localization tuning for production Telegram responses.
 Review ask:
 - Validate API contract of `/actions/feed` and confirm fast-path wiring in SKILL.md is sufficient for §29.4.6 MVP.
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=1
+P1 items: none
+P2 items: локализация human feed (`toHumanFeedText`) под русскоязычный Telegram (backlog)
