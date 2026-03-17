@@ -179,7 +179,7 @@ P2 items: none — H-04 P2 fully closed
 ## H-2026-03-17-08
 Role: Codex=Executor, Claude=Reviewer
 Scope: EC-1 MVP — fast-path router for frequent Telegram read intents in stemford-data skill
-Commits: pending
+Commits: 994a742
 Changes:
 - Updated `skills/stemford-data/SKILL.md` with explicit deterministic fast-path section.
 - Added intent matcher rules for:
