@@ -285,3 +285,35 @@ Review ask:
 Verdict: P1=0, P2=0
 P1 items: none
 P2 items: none — VPS smoke confirms `403 forbidden` + `tool_access_denied` audit trail for forbidden PMO financial approval request
+
+---
+
+## H-2026-03-17-12
+Role: Codex=Executor, Claude=Reviewer
+Scope: EC-2 — webhook alerts from Control API to Telegram for critical events
+Commits: pending
+Changes:
+- Added Telegram webhook alert pipeline in `app/control-api/server.js`.
+- Implemented critical event set:
+  - `task_failed`
+  - `retry_limit_exceeded`
+  - `approval_requested`
+- Alert send is configured by env with safe fallbacks:
+  - `CONTROL_API_TELEGRAM_WEBHOOK_ENABLED` (default ON)
+  - `CONTROL_API_TELEGRAM_BOT_TOKEN` -> fallback `TELEGRAM_BOT_TOKEN`
+  - `CONTROL_API_NOTIFY_CHAT_IDS` -> fallback `TELEGRAM_NOTIFY_CHAT_IDS` -> fallback `ALLOWED_CHAT_IDS`
+- Alert formatting includes actionable approval commands:
+  - `/approve <approval_id> --role=<approver>`
+  - `/reject <approval_id> reason --role=<approver>`
+- Updated API reference:
+  - `skills/stemford-data/references/api.md` with EC-2 config + rollback notes.
+Checks:
+- `node --check app/control-api/server.js` passed.
+- Manual code review: webhook is best-effort and cannot break API response path.
+Open risks:
+- VPS smoke pending: requires real event generation + Telegram delivery check.
+Review ask:
+- Validate EC-2 implementation and review for regressions/risk (notably: no response blocking, no impact on actions_log writes).
+Verdict: pending
+P1 items: pending
+P2 items: pending

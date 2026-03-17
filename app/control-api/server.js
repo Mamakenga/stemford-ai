@@ -9,6 +9,27 @@ const MAX_RETRY_ATTEMPTS = (() => {
   return Number.isInteger(raw) && raw > 0 ? raw : 5;
 })();
 const CONTROL_API_ENFORCE_TOOL_ACCESS = String(process.env.CONTROL_API_ENFORCE_TOOL_ACCESS || "1") !== "0";
+const CONTROL_API_TELEGRAM_WEBHOOK_ENABLED = String(process.env.CONTROL_API_TELEGRAM_WEBHOOK_ENABLED || "1") !== "0";
+
+function parseChatIds(raw) {
+  return String(raw || "")
+    .split(",")
+    .map((x) => x.trim())
+    .filter((x) => /^-?\d+$/.test(x));
+}
+
+const TELEGRAM_NOTIFY_TOKEN = String(
+  process.env.CONTROL_API_TELEGRAM_BOT_TOKEN ||
+  process.env.TELEGRAM_BOT_TOKEN ||
+  ""
+).trim();
+const TELEGRAM_NOTIFY_CHAT_IDS = parseChatIds(
+  process.env.CONTROL_API_NOTIFY_CHAT_IDS ||
+  process.env.TELEGRAM_NOTIFY_CHAT_IDS ||
+  process.env.ALLOWED_CHAT_IDS ||
+  ""
+);
+const CRITICAL_TELEGRAM_ACTIONS = new Set(["task_failed", "retry_limit_exceeded", "approval_requested"]);
 
 const app = express();
 app.use(express.json());
@@ -235,8 +256,64 @@ async function writeAction(actionType, entityType, entityId, actorRole, payload)
        values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
       [id("act"), actionType, entityType, entityId, actorRole, null, null, JSON.stringify(payload || {})]
     );
+    void notifyCriticalTelegramEvent({ actionType, entityType, entityId, actorRole, payload });
   } catch (e) {
     console.error("actions_log write failed:", e.message);
+  }
+}
+
+async function sendTelegramNotification(text) {
+  if (!CONTROL_API_TELEGRAM_WEBHOOK_ENABLED) return;
+  if (!TELEGRAM_NOTIFY_TOKEN || TELEGRAM_NOTIFY_CHAT_IDS.length === 0) return;
+
+  const endpoint = `https://api.telegram.org/bot${TELEGRAM_NOTIFY_TOKEN}/sendMessage`;
+  const jobs = TELEGRAM_NOTIFY_CHAT_IDS.map((chatId) =>
+    fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        disable_web_page_preview: true,
+      }),
+    })
+  );
+
+  const results = await Promise.allSettled(jobs);
+  const failed = results.filter((r) => r.status === "rejected");
+  if (failed.length > 0) {
+    console.warn(`telegram webhook send failed: ${failed.length}/${results.length}`);
+  }
+}
+
+function buildCriticalTelegramMessage({ actionType, entityType, entityId, actorRole, payload }) {
+  const base = `[Control API] ${actionType}\nentity: ${entityType}:${entityId}\nactor: ${actorRole || "unknown"}`;
+  if (actionType === "task_failed") {
+    const reason = payload && payload.reason ? String(payload.reason) : "no reason";
+    return `${base}\nreason: ${reason}`;
+  }
+  if (actionType === "retry_limit_exceeded") {
+    const attempt = payload && payload.retry_attempt != null ? String(payload.retry_attempt) : "?";
+    const limit = payload && payload.max_retry_attempts != null ? String(payload.max_retry_attempts) : "?";
+    const reason = payload && payload.reason ? String(payload.reason) : "no reason";
+    return `${base}\nattempt: ${attempt}/${limit}\nreason: ${reason}`;
+  }
+  if (actionType === "approval_requested") {
+    const approvalId = payload && payload.approval_id ? String(payload.approval_id) : "unknown";
+    const actionClass = payload && payload.action_class ? String(payload.action_class) : "unknown";
+    const approver = payload && payload.approver_role ? String(payload.approver_role) : "strategy";
+    return `${base}\napproval_id: ${approvalId}\naction_class: ${actionClass}\napprover_role: ${approver}\n\napprove: /approve ${approvalId} --role=${approver}\nreject: /reject ${approvalId} reason --role=${approver}`;
+  }
+  return base;
+}
+
+async function notifyCriticalTelegramEvent(evt) {
+  try {
+    if (!CRITICAL_TELEGRAM_ACTIONS.has(evt.actionType)) return;
+    const text = buildCriticalTelegramMessage(evt);
+    await sendTelegramNotification(text);
+  } catch (e) {
+    console.warn("telegram webhook notify failed:", e.message);
   }
 }
 

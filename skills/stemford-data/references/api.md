@@ -29,6 +29,28 @@ Compatibility bypass:
 
 ---
 
+## Critical event webhook to Telegram (EC-2)
+
+Control API can send Telegram notifications for critical events:
+
+- `task_failed`
+- `retry_limit_exceeded`
+- `approval_requested`
+
+Feature flags and routing:
+- `CONTROL_API_TELEGRAM_WEBHOOK_ENABLED=1` (default: enabled)
+- `CONTROL_API_TELEGRAM_BOT_TOKEN` (fallback: `TELEGRAM_BOT_TOKEN`)
+- `CONTROL_API_NOTIFY_CHAT_IDS` (fallback: `TELEGRAM_NOTIFY_CHAT_IDS`, then `ALLOWED_CHAT_IDS`)
+
+Rollback/permissive mode:
+- set `CONTROL_API_TELEGRAM_WEBHOOK_ENABLED=0` to disable notifications without changing API behavior.
+
+Notes:
+- Notifications are best-effort and do not break API responses.
+- Source of truth remains `actions_log`; webhook is an additional alert channel.
+
+---
+
 ## GET /tasks
 
 List tasks with optional filters.
