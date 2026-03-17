@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Stemford memory cards maintenance daily
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=10m
+Persistent=true
+Unit=stemford-memory-cards-maintenance.service
+
+[Install]
+WantedBy=timers.target
+

@@ -15,6 +15,14 @@ const STALL_WATCHDOG_THRESHOLD_MIN = (() => {
   const raw = Number(process.env.STALL_WATCHDOG_THRESHOLD_MIN || 120);
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 120;
 })();
+const MEMORY_CARD_DEFAULT_TTL_HOURS = (() => {
+  const raw = Number(process.env.MEMORY_CARD_DEFAULT_TTL_HOURS || 168);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 168;
+})();
+const MEMORY_CARD_SENSITIVE_MAX_TTL_HOURS = (() => {
+  const raw = Number(process.env.MEMORY_CARD_SENSITIVE_MAX_TTL_HOURS || 24);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 24;
+})();
 const STEMFORD_SKILL_PATH = String(
   process.env.CONTROL_API_STEMFORD_SKILL_PATH || "/opt/stemford/skills/stemford-data/SKILL.md"
 );
@@ -75,6 +83,26 @@ function toIsoTimestamp(value) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
   return d.toISOString();
+}
+
+function parseBoolean(raw, fallback = false) {
+  if (raw == null) return fallback;
+  const v = String(raw).trim().toLowerCase();
+  if (["1", "true", "yes", "y"].includes(v)) return true;
+  if (["0", "false", "no", "n"].includes(v)) return false;
+  return fallback;
+}
+
+function parseIsoDatetime(raw) {
+  if (!raw) return null;
+  const d = new Date(String(raw).trim());
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
+function includesSensitiveMarkers(text) {
+  const value = String(text || "");
+  return /(password|passwd|token|secret|api[_ -]?key|парол|токен|секрет|ключ\s*api)/i.test(value);
 }
 
 function toHumanFeedText(row) {
@@ -384,6 +412,186 @@ app.get("/actions/feed", async (req, res) => {
   }
 });
 
+app.post("/memory/cards", async (req, res) => {
+  const agent_role = String(req.body?.agent_role || "").trim();
+  const user_id = String(req.body?.user_id || "").trim();
+  const topic = String(req.body?.topic || "").trim();
+  const content = String(req.body?.content || "").trim();
+  const is_sensitive = parseBoolean(req.body?.is_sensitive, false);
+  const source_action_id = req.body?.source_action_id ? String(req.body.source_action_id).trim() : null;
+  const expires_at_raw = req.body?.expires_at ? String(req.body.expires_at).trim() : "";
+
+  if (!agent_role || !user_id || !topic || !content) {
+    return fail(res, 400, "validation_error", "agent_role, user_id, topic, content are required");
+  }
+  if (content.length > 4000) {
+    return fail(res, 400, "validation_error", "content is too long (max 4000 chars)");
+  }
+  if (!is_sensitive && includesSensitiveMarkers(content)) {
+    return fail(res, 400, "validation_error", "possible sensitive content requires is_sensitive=true");
+  }
+
+  const allowed = await requireToolAccess(
+    res,
+    agent_role,
+    "memory.write",
+    { entity_type: "memory_card", entity_id: source_action_id || "new" }
+  );
+  if (!allowed) return;
+
+  const nowMs = Date.now();
+  const defaultExpires = new Date(nowMs + MEMORY_CARD_DEFAULT_TTL_HOURS * 3600 * 1000);
+  const expiresAtDate = expires_at_raw ? parseIsoDatetime(expires_at_raw) : defaultExpires;
+  if (!expiresAtDate) {
+    return fail(res, 400, "validation_error", "expires_at must be a valid ISO datetime");
+  }
+  if (expiresAtDate.getTime() <= nowMs) {
+    return fail(res, 400, "validation_error", "expires_at must be in the future");
+  }
+  if (is_sensitive) {
+    const sensitiveMax = nowMs + MEMORY_CARD_SENSITIVE_MAX_TTL_HOURS * 3600 * 1000;
+    if (expiresAtDate.getTime() > sensitiveMax) {
+      return fail(
+        res,
+        400,
+        "validation_error",
+        `sensitive cards TTL must be <= ${MEMORY_CARD_SENSITIVE_MAX_TTL_HOURS} hours`
+      );
+    }
+  }
+
+  try {
+    const q = await pool.query(
+      `insert into memory_cards
+       (agent_role,user_id,topic,content,is_sensitive,expires_at,source_action_id)
+       values ($1,$2,$3,$4,$5,$6,$7)
+       returning id,agent_role,user_id,topic,content,is_sensitive,created_at,expires_at,source_action_id`,
+      [agent_role, user_id, topic, content, is_sensitive, expiresAtDate.toISOString(), source_action_id]
+    );
+
+    const row = q.rows[0];
+    await writeAction("memory_card_created", "memory_card", String(row.id), agent_role, {
+      user_id: row.user_id,
+      topic: row.topic,
+      is_sensitive: row.is_sensitive,
+      expires_at: row.expires_at,
+      source_action_id: row.source_action_id || null,
+    });
+
+    return ok(res, {
+      ...row,
+      created_at: toIsoTimestamp(row.created_at),
+      expires_at: toIsoTimestamp(row.expires_at),
+    });
+  } catch (e) {
+    if (String(e.message || "").includes("memory_cards_source_action_fk")) {
+      return fail(res, 400, "validation_error", "source_action_id not found in actions_log");
+    }
+    return fail(res, 500, "memory_card_create_failed", e.message);
+  }
+});
+
+app.get("/memory/cards", async (req, res) => {
+  const actor_role = String(req.query.actor_role || "orchestrator").trim();
+  const allowed = await requireToolAccess(
+    res,
+    actor_role,
+    "memory.read",
+    { entity_type: "memory_card", entity_id: "query" }
+  );
+  if (!allowed) return;
+
+  const limit = parsePositiveInt(req.query.limit, 20, 100);
+  const includeExpired = parseBoolean(req.query.include_expired, false);
+  const where = [];
+  const vals = [];
+
+  if (req.query.user_id) {
+    vals.push(String(req.query.user_id).trim());
+    where.push(`user_id = $${vals.length}`);
+  }
+  if (req.query.agent_role) {
+    vals.push(String(req.query.agent_role).trim());
+    where.push(`agent_role = $${vals.length}`);
+  }
+  if (req.query.topic) {
+    vals.push(`%${String(req.query.topic).trim()}%`);
+    where.push(`topic ilike $${vals.length}`);
+  }
+  if (!includeExpired) {
+    where.push(`expires_at > now()`);
+  }
+  if (req.query.since_hours != null) {
+    const sinceHours = parsePositiveInt(req.query.since_hours, 0, 24 * 30);
+    if (sinceHours > 0) {
+      vals.push(sinceHours);
+      where.push(`created_at >= now() - ($${vals.length}::text || ' hours')::interval`);
+    }
+  }
+
+  vals.push(limit);
+  try {
+    const q = await pool.query(
+      `select id,agent_role,user_id,topic,content,is_sensitive,created_at,expires_at,source_action_id
+       from memory_cards
+       ${where.length ? "where " + where.join(" and ") : ""}
+       order by created_at desc
+       limit $${vals.length}`,
+      vals
+    );
+
+    const items = q.rows.map((row) => ({
+      ...row,
+      created_at: toIsoTimestamp(row.created_at),
+      expires_at: toIsoTimestamp(row.expires_at),
+    }));
+    return ok(res, { count: items.length, items });
+  } catch (e) {
+    return fail(res, 500, "memory_cards_query_failed", e.message);
+  }
+});
+
+app.post("/memory/cards/maintenance", async (req, res) => {
+  const actor_role = String(req.body?.actor_role || "system_watchdog").trim();
+  const allowed = await requireToolAccess(
+    res,
+    actor_role,
+    "memory.write",
+    { entity_type: "memory_card", entity_id: "maintenance" }
+  );
+  if (!allowed) return;
+
+  try {
+    const q = await pool.query(
+      `
+      with expired as (
+        delete from memory_cards
+        where expires_at <= now()
+        returning id
+      ),
+      compacted as (
+        update memory_cards
+        set content = left(content, 240) || ' ... [summary]'
+        where is_sensitive = false
+          and created_at < now() - interval '3 days'
+          and char_length(content) > 260
+          and content not like '%[summary]'
+        returning id
+      )
+      select
+        (select count(*)::int from expired) as expired_deleted,
+        (select count(*)::int from compacted) as compacted_count
+      `
+    );
+
+    const row = q.rows[0] || { expired_deleted: 0, compacted_count: 0 };
+    await writeAction("memory_cards_maintenance_run", "memory_card", "maintenance", actor_role, row);
+    return ok(res, row);
+  } catch (e) {
+    return fail(res, 500, "memory_cards_maintenance_failed", e.message);
+  }
+});
+
 
 /* ===== approvals mvp routes ===== */
 const APPROVAL_CLASSES = new Set(["safe_read","internal_write","external_comm","financial_change","policy_change"]);
@@ -397,6 +605,8 @@ const ROLE_ACTION_WHITELIST = {
   orchestrator: new Set([
     "tasks.write",
     "tasks.retry",
+    "memory.read",
+    "memory.write",
     "approvals.decide",
     "approvals.request.safe_read",
     "approvals.request.internal_write",
@@ -407,6 +617,8 @@ const ROLE_ACTION_WHITELIST = {
   strategy: new Set([
     "tasks.write",
     "tasks.retry",
+    "memory.read",
+    "memory.write",
     "approvals.decide",
     "approvals.request.safe_read",
     "approvals.request.internal_write",
@@ -415,6 +627,8 @@ const ROLE_ACTION_WHITELIST = {
   finance: new Set([
     "tasks.write",
     "tasks.retry",
+    "memory.read",
+    "memory.write",
     "approvals.decide",
     "approvals.request.safe_read",
     "approvals.request.internal_write",
@@ -423,8 +637,13 @@ const ROLE_ACTION_WHITELIST = {
   pmo: new Set([
     "tasks.write",
     "tasks.retry",
+    "memory.read",
+    "memory.write",
     "approvals.request.safe_read",
     "approvals.request.internal_write",
+  ]),
+  system_watchdog: new Set([
+    "memory.write",
   ]),
 };
 

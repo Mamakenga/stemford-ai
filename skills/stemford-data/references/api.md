@@ -19,10 +19,11 @@ Allowed action keys:
 
 | Role | Allowed |
 |------|---------|
-| orchestrator | `tasks.write`, `tasks.retry`, `approvals.decide`, `approvals.request.*` |
-| strategy | `tasks.write`, `tasks.retry`, `approvals.decide`, `approvals.request.safe_read`, `approvals.request.internal_write`, `approvals.request.external_comm` |
-| finance | `tasks.write`, `tasks.retry`, `approvals.decide`, `approvals.request.safe_read`, `approvals.request.internal_write`, `approvals.request.financial_change` |
-| pmo | `tasks.write`, `tasks.retry`, `approvals.request.safe_read`, `approvals.request.internal_write` |
+| orchestrator | `tasks.write`, `tasks.retry`, `memory.read`, `memory.write`, `approvals.decide`, `approvals.request.*` |
+| strategy | `tasks.write`, `tasks.retry`, `memory.read`, `memory.write`, `approvals.decide`, `approvals.request.safe_read`, `approvals.request.internal_write`, `approvals.request.external_comm` |
+| finance | `tasks.write`, `tasks.retry`, `memory.read`, `memory.write`, `approvals.decide`, `approvals.request.safe_read`, `approvals.request.internal_write`, `approvals.request.financial_change` |
+| pmo | `tasks.write`, `tasks.retry`, `memory.read`, `memory.write`, `approvals.request.safe_read`, `approvals.request.internal_write` |
+| system_watchdog | `memory.write` |
 
 Compatibility bypass:
 - `human_telegram` keeps access for current Telegram bridge commands.
@@ -178,6 +179,84 @@ curl -s -X POST http://127.0.0.1:3210/tasks/tg_123456/retry \
   -H "Content-Type: application/json" \
   -d '{"actor_role":"orchestrator","reason":"Повтор после фикса","retry_after":"2026-03-17T08:30:00Z"}'
 ```
+
+---
+
+## POST /memory/cards
+
+Create a memory card with TTL.
+
+Body (required: `agent_role`, `user_id`, `topic`, `content`):
+```json
+{
+  "agent_role": "orchestrator",
+  "user_id": "telegram:132360928",
+  "topic": "pending approvals context",
+  "content": "User asked to track approvals every morning",
+  "is_sensitive": false,
+  "expires_at": "2026-03-24T08:00:00Z",
+  "source_action_id": "act_123"
+}
+```
+
+Rules:
+- `content` max length: 4000 chars
+- if content looks sensitive, set `is_sensitive=true`
+- default TTL when `expires_at` omitted: `MEMORY_CARD_DEFAULT_TTL_HOURS` (default `168`)
+- sensitive cards max TTL: `MEMORY_CARD_SENSITIVE_MAX_TTL_HOURS` (default `24`)
+
+Error cases:
+- `400 validation_error` - missing fields / invalid datetime / sensitive TTL exceeded / source_action not found
+- `403 forbidden` - role has no `memory.write`
+
+---
+
+## GET /memory/cards
+
+List memory cards with filters.
+
+Query params:
+- `actor_role` (optional, default `orchestrator`) - used for tool-access check
+- `user_id` (optional)
+- `agent_role` (optional)
+- `topic` (optional, partial match, ILIKE)
+- `include_expired` (optional, default `false`)
+- `since_hours` (optional, max `720`)
+- `limit` (optional, default `20`, max `100`)
+
+Example:
+```bash
+curl -s 'http://127.0.0.1:3210/memory/cards?actor_role=orchestrator&user_id=telegram:132360928&limit=20'
+```
+
+Error cases:
+- `403 forbidden` - role has no `memory.read`
+
+---
+
+## POST /memory/cards/maintenance
+
+Maintenance job for memory cards.
+
+Body:
+```json
+{ "actor_role": "system_watchdog" }
+```
+
+Effects:
+- deletes expired cards
+- compacts old non-sensitive long cards (>3 days old, >260 chars)
+- writes `memory_cards_maintenance_run` to `actions_log`
+
+Example:
+```bash
+curl -s -X POST http://127.0.0.1:3210/memory/cards/maintenance \
+  -H "Content-Type: application/json" \
+  -d '{"actor_role":"system_watchdog"}'
+```
+
+Error cases:
+- `403 forbidden` - role has no `memory.write`
 
 ---
 

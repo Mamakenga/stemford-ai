@@ -578,3 +578,56 @@ Review ask:
 Verdict: P1=0, P2=1
 P1 items: none
 P2 items: timestamp in human feed uses UTC `HH:MM`; backlog for user-local time formatting (minor UX)
+
+---
+
+## H-2026-03-17-22
+Role: Codex=Executor, Claude=Reviewer
+Scope: §29.3 Memory cards MVP — DB schema, API routes, maintenance automation, smoke S7
+Commits: pending (will be updated after commit)
+Changes:
+- Added migration `app/control-api/migrations/009_memory_cards.sql`:
+  - new table `memory_cards` with TTL (`expires_at`), sensitive flag, optional `source_action_id` link to `actions_log`;
+  - FK to `roles(role_id)` for `agent_role`;
+  - indexes for user/agent lookup and expiry scans.
+- Extended `app/control-api/server.js`:
+  - env knobs: `MEMORY_CARD_DEFAULT_TTL_HOURS`, `MEMORY_CARD_SENSITIVE_MAX_TTL_HOURS`;
+  - helpers: `parseBoolean`, `parseIsoDatetime`, `includesSensitiveMarkers`;
+  - new endpoints:
+    - `POST /memory/cards` (create),
+    - `GET /memory/cards` (query),
+    - `POST /memory/cards/maintenance` (expire+compact maintenance);
+  - audit actions: `memory_card_created`, `memory_cards_maintenance_run`;
+  - tool-access whitelist extended with `memory.read`/`memory.write` for core roles and `memory.write` for `system_watchdog`.
+- Added maintenance runtime artifacts:
+  - script: `app/control-api/scripts/memory_cards_maintenance.sh`,
+  - systemd units:
+    - `app/control-api/systemd/stemford-memory-cards-maintenance.service`
+    - `app/control-api/systemd/stemford-memory-cards-maintenance.timer`
+  - updated `app/control-api/systemd/README.md` with install/run commands.
+- Upgraded cookbook smoke:
+  - `app/control-api/scripts/smoke_scenarios.sh` S7 implemented:
+    - create memory card via API,
+    - read back via API,
+    - run maintenance and assert expired cleanup;
+  - cleanup trap extended for `memory_cards` and related `actions_log` rows.
+- Updated docs:
+  - `app/control-api/scripts/README.md`,
+  - `skills/stemford-data/references/api.md`,
+  - `skills/stemford-data/SKILL.md`.
+Checks:
+- `node --check app/control-api/server.js` passed.
+- Static diff review completed for migration/routes/scripts/docs consistency.
+- Local shell syntax check for `*.sh` could not run in this environment (`bash` unavailable/unstable on current host), so shell validation deferred to VPS smoke.
+Open risks:
+- Not yet verified on VPS:
+  - migration apply for `009_memory_cards.sql`,
+  - `POST /memory/cards/maintenance` with `actor_role=system_watchdog`,
+  - S7 end-to-end in `smoke_scenarios.sh`.
+Review ask:
+- Validate memory route contracts, safety rules (sensitive TTL/content markers), and whitelist model.
+- Validate maintenance script/systemd units and confirm no policy regressions from adding `system_watchdog -> memory.write`.
+- Confirm S7 implementation and cleanup behavior are production-safe for repeated smoke runs.
+Verdict: pending
+P1 items: pending
+P2 items: pending

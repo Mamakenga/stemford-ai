@@ -42,6 +42,9 @@ Always check `ok` field before presenting results.
 | Pending approvals | GET | `/approvals/pending?approver_role=` |
 | Decide approval | POST | `/approvals/decide` |
 | Actions feed | GET | `/actions/feed?limit=&format=` |
+| Create memory card | POST | `/memory/cards` |
+| List memory cards | GET | `/memory/cards?actor_role=&user_id=&topic=` |
+| Run memory maintenance | POST | `/memory/cards/maintenance` |
 | Health check | GET | `/health` |
 | DB ping | GET | `/db/ping` |
 
@@ -102,6 +105,30 @@ Default approvers: `external_comm` → strategy, `financial_change` → finance,
 ## Detailed API Docs
 
 For full request/response schemas with curl examples, read [references/api.md](references/api.md).
+
+## Memory Cards (29.4.3)
+
+Use memory cards for short-lived conversational context.
+
+Read flow (example user asks: "что обсуждали вчера?"):
+1. Resolve user id from chat metadata (for example `telegram:<sender_id>`).
+2. Call:
+```bash
+curl -s "http://127.0.0.1:3210/memory/cards?actor_role=orchestrator&user_id=<user_id>&since_hours=24&limit=20"
+```
+3. Summarize returned items as short bullets (topic + key point + age).
+
+Write flow (after important agreement/decision):
+```bash
+curl -s -X POST http://127.0.0.1:3210/memory/cards \
+  -H "Content-Type: application/json" \
+  -d '{"agent_role":"orchestrator","user_id":"<user_id>","topic":"...", "content":"...", "source_action_id":"<action_id_optional>"}'
+```
+
+Rules:
+- Do not store secrets in plain text; if sensitive, set `is_sensitive=true`.
+- Keep content compact (1-3 sentences).
+- Use memory as context helper, not as source of truth for task status (source of truth is Control API tasks/goals/approvals).
 
 ## Language
 

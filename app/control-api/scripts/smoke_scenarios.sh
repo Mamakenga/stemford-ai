@@ -26,6 +26,8 @@ SKIP=0
 TASK_ID=""
 declare -a SMOKE_TASK_IDS=()
 declare -a SMOKE_ENTITY_IDS=()
+declare -a SMOKE_MEMORY_CARD_IDS=()
+declare -a SMOKE_MEMORY_USER_IDS=()
 
 log_pass() { PASS=$((PASS + 1)); echo "PASS: $1"; }
 log_fail() { FAIL=$((FAIL + 1)); echo "FAIL: $1"; }
@@ -37,7 +39,7 @@ sql_literal() {
 }
 
 cleanup_smoke_entities() {
-  local task_id ent_id task_id_sql ent_id_sql
+  local task_id ent_id mem_id mem_user task_id_sql ent_id_sql mem_id_sql mem_user_sql
   for task_id in "${SMOKE_TASK_IDS[@]}"; do
     task_id_sql="$(sql_literal "$task_id")"
     psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
@@ -51,6 +53,21 @@ cleanup_smoke_entities() {
     psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
       delete from actions_log where entity_id = ${ent_id_sql};
       delete from approval_requests where entity_id = ${ent_id_sql};
+    " >/dev/null 2>&1 || true
+  done
+
+  for mem_id in "${SMOKE_MEMORY_CARD_IDS[@]}"; do
+    mem_id_sql="$(sql_literal "$mem_id")"
+    psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
+      delete from actions_log where entity_type = 'memory_card' and entity_id = ${mem_id_sql};
+      delete from memory_cards where id::text = ${mem_id_sql};
+    " >/dev/null 2>&1 || true
+  done
+
+  for mem_user in "${SMOKE_MEMORY_USER_IDS[@]}"; do
+    mem_user_sql="$(sql_literal "$mem_user")"
+    psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
+      delete from memory_cards where user_id = ${mem_user_sql};
     " >/dev/null 2>&1 || true
   done
 }
@@ -192,7 +209,54 @@ scenario_6_pmo_forbidden_finance_command() {
 }
 
 scenario_7_memory_cards() {
-  log_skip "S7 memory cards: not implemented yet (planned in §29.4.3)"
+  local now user_id topic content create_resp card_id read_resp maint_resp expired_user_id
+  now="$(date +%s)"
+  user_id="smoke_memory_user_${now}"
+  topic="smoke_memory_topic_${now}"
+  content="Smoke memory card content ${now}"
+  expired_user_id="smoke_memory_expired_${now}"
+  SMOKE_MEMORY_USER_IDS+=("$user_id")
+  SMOKE_MEMORY_USER_IDS+=("$expired_user_id")
+
+  create_resp="$(curl -sS -X POST "$API_BASE/memory/cards" \
+    -H "Content-Type: application/json" \
+    -d "{\"agent_role\":\"orchestrator\",\"user_id\":\"${user_id}\",\"topic\":\"${topic}\",\"content\":\"${content}\"}")"
+  if ! echo "$create_resp" | jq -e '.ok == true and (.data.id | tostring | length > 0)' >/dev/null; then
+    log_fail "S7 memory cards: create failed"
+    return
+  fi
+
+  card_id="$(echo "$create_resp" | jq -r '.data.id | tostring')"
+  SMOKE_MEMORY_CARD_IDS+=("$card_id")
+
+  read_resp="$(curl -sS "$API_BASE/memory/cards?actor_role=orchestrator&user_id=${user_id}&limit=20")"
+  if ! echo "$read_resp" | jq -e --arg cid "$card_id" '.ok == true and (.data.items | map(.id|tostring) | index($cid) != null)' >/dev/null; then
+    log_fail "S7 memory cards: created card not returned by read endpoint"
+    return
+  fi
+
+  psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
+    insert into memory_cards (agent_role,user_id,topic,content,is_sensitive,created_at,expires_at)
+    values (
+      'orchestrator',
+      '${expired_user_id}',
+      'smoke memory expired ${now}',
+      'expired card for maintenance smoke',
+      false,
+      now() - interval '2 days',
+      now() - interval '1 day'
+    );
+  " >/dev/null
+
+  maint_resp="$(curl -sS -X POST "$API_BASE/memory/cards/maintenance" \
+    -H "Content-Type: application/json" \
+    -d '{"actor_role":"system_watchdog"}')"
+  if ! echo "$maint_resp" | jq -e '.ok == true and (.data.expired_deleted | tonumber) >= 1' >/dev/null; then
+    log_fail "S7 memory cards: maintenance did not report expired cleanup"
+    return
+  fi
+
+  log_pass "S7 memory cards: create/read/maintenance"
 }
 
 echo "Running smoke scenarios against $API_BASE"
@@ -212,3 +276,4 @@ echo "Summary: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"
 if [ "$FAIL" -gt 0 ]; then
   exit 1
 fi
+
