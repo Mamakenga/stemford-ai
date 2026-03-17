@@ -496,7 +496,7 @@ P2 items: pending
 ## H-2026-03-17-19
 Role: Codex=Executor, Claude=Reviewer
 Scope: Follow-up to H-18 — fix `psql` variable syntax compatibility in smoke script
-Commits: pending
+Commits: faa180b
 Changes:
 - Updated `app/control-api/scripts/smoke_scenarios.sh` to replace `:'var'` SQL placeholders (which failed on target VPS `psql`) with safe escaped SQL literals via `sql_literal()` helper.
 - Kept cleanup behavior from H-18 and applied compatibility fix across:
