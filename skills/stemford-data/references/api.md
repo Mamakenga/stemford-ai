@@ -20,11 +20,6 @@ curl -s 'http://127.0.0.1:3210/tasks?status=in_progress'
 
 Response: `{ ok: true, data: { count: N, tasks: [...] } }`
 
-Task fields include:
-- `id`, `title`, `primary_goal_id`, `status`, `assignee`, `due_at`
-- `retry_attempt` (integer, starts from 0)
-- `retry_after` (datetime or null)
-
 ---
 
 ## POST /tasks
@@ -54,14 +49,10 @@ curl -s -X POST http://127.0.0.1:3210/tasks \
 ## POST /tasks/:id/claim
 
 Take a task into work. Only works on tasks with status `todo` or `blocked`.
-If `retry_after` is set in the future, claim is rejected.
 
 Body: `{ "actor_role": "strategy" }`
 
 Sets status to `in_progress`, records `claimed_by` and `claimed_at`.
-
-Error cases:
-- `409 retry_not_ready` — task cannot be claimed before `retry_after`
 
 ---
 
@@ -96,41 +87,6 @@ Body: `{ "actor_role": "finance", "reason": "Нет доступа к данны
 Reopen a done/failed/blocked task back to `todo`.
 
 Body: `{ "actor_role": "orchestrator" }`
-
----
-
-## POST /tasks/:id/retry
-
-Queue retry for a `failed` or `blocked` task and return it to `todo`.
-
-Body:
-```json
-{
-  "actor_role": "orchestrator",
-  "reason": "Повтор после исправления входных данных",
-  "retry_after": "2026-03-17T08:30:00Z"
-}
-```
-
-`reason` and `retry_after` are optional.
-Retry attempts are limited by `TASK_MAX_RETRY_ATTEMPTS` (default: `5`).
-
-Effects:
-- increments `retry_attempt`
-- sets `retry_after` (or null if omitted)
-- resets `claimed_by`, `claimed_at`, `completed_at`
-- writes `task_retry_queued` into `actions_log`
-
-Error cases:
-- `409 retry_limit_exceeded` — retry attempts reached max limit
-- `409 retry_conflict` — task state changed concurrently
-
-Example:
-```bash
-curl -s -X POST http://127.0.0.1:3210/tasks/tg_123456/retry \
-  -H "Content-Type: application/json" \
-  -d '{"actor_role":"orchestrator","reason":"Повтор после фикса","retry_after":"2026-03-17T08:30:00Z"}'
-```
 
 ---
 

@@ -4,10 +4,6 @@ const dotenv = require("dotenv");
 
 dotenv.config({ path: "/opt/stemford/run/.env" });
 const PORT = Number(process.env.CONTROL_API_PORT || 3210);
-const MAX_RETRY_ATTEMPTS = (() => {
-  const raw = Number(process.env.TASK_MAX_RETRY_ATTEMPTS || 5);
-  return Number.isInteger(raw) && raw > 0 ? raw : 5;
-})();
 
 const app = express();
 app.use(express.json());
@@ -144,7 +140,7 @@ app.get("/tasks", async (req, res) => {
   }
 
   const sql = `
-    select id,title,primary_goal_id,status,assignee,due_at,retry_attempt,retry_after
+    select id,title,primary_goal_id,status,assignee,due_at
     from tasks
     ${where.length ? "where " + where.join(" and ") : ""}
     order by due_at nulls last, id
@@ -322,33 +318,12 @@ app.post("/tasks/:id/claim", async (req, res) => {
           claimed_at = now()
       WHERE id = $1
         AND status IN ('todo','blocked')
-        AND (retry_after IS NULL OR retry_after <= now())
-      RETURNING id,title,status,assignee,claimed_by,claimed_at,primary_goal_id,retry_after
+      RETURNING id,title,status,assignee,claimed_by,claimed_at,primary_goal_id
       `,
       [taskId, actor_role]
     );
 
     if (q.rowCount === 0) {
-      const current = await pool.query(
-        `select id,status,retry_after,
-                (retry_after is not null and retry_after > now()) as retry_locked
-         from tasks
-         where id = $1`,
-        [taskId]
-      );
-
-      if (current.rowCount > 0) {
-        const row = current.rows[0];
-        if (["todo", "blocked"].includes(row.status) && row.retry_locked) {
-          return fail(
-            res,
-            409,
-            "retry_not_ready",
-            `task cannot be claimed before retry_after (${row.retry_after.toISOString()})`
-          );
-        }
-      }
-
       return fail(res, 409, "not_claimable", "task is not in todo/blocked or does not exist");
     }
 
@@ -487,83 +462,6 @@ app.post("/tasks/:id/reopen", async (req, res) => {
     return ok(res, row);
   } catch (e) {
     return fail(res, 500, "task_reopen_failed", e.message);
-  }
-});
-
-app.post("/tasks/:id/retry", async (req, res) => {
-  const taskId = req.params.id;
-  const actor_role = String(req.body?.actor_role || "").trim();
-  const reason = req.body?.reason ? String(req.body.reason) : null;
-  const retry_after_raw = req.body?.retry_after ? String(req.body.retry_after).trim() : "";
-
-  if (!actor_role) {
-    return fail(res, 400, "validation_error", "actor_role is required");
-  }
-
-  let retryAfter = null;
-  if (retry_after_raw) {
-    const parsed = new Date(retry_after_raw);
-    if (Number.isNaN(parsed.getTime())) {
-      return fail(res, 400, "validation_error", "retry_after must be a valid ISO datetime");
-    }
-    retryAfter = parsed.toISOString();
-  }
-
-  try {
-    const current = await pool.query(
-      `select id,status,coalesce(retry_attempt,0) as retry_attempt
-       from tasks
-       where id=$1`,
-      [taskId]
-    );
-
-    if (current.rowCount === 0) {
-      return fail(res, 404, "not_found", "task not found");
-    }
-
-    const before = current.rows[0];
-    if (!["failed", "blocked"].includes(before.status)) {
-      return fail(res, 409, "invalid_transition_or_not_found", "task not found or retry transition is not allowed");
-    }
-    if (Number(before.retry_attempt) >= MAX_RETRY_ATTEMPTS) {
-      return fail(
-        res,
-        409,
-        "retry_limit_exceeded",
-        `retry limit reached: ${before.retry_attempt}/${MAX_RETRY_ATTEMPTS}`
-      );
-    }
-
-    const q = await pool.query(
-      `update tasks
-         set status='todo',
-             status_reason=$2,
-             retry_attempt=coalesce(retry_attempt,0)+1,
-             retry_after=$3,
-             claimed_by=NULL,
-             claimed_at=NULL,
-             completed_at=NULL
-       where id=$1
-         and status in ('failed','blocked')
-         and coalesce(retry_attempt,0) < $4
-       returning id,title,status,assignee,primary_goal_id,status_reason,retry_attempt,retry_after,claimed_by,claimed_at,completed_at`,
-      [taskId, reason, retryAfter, MAX_RETRY_ATTEMPTS]
-    );
-
-    if (q.rowCount === 0) {
-      return fail(res, 409, "retry_conflict", "task state changed, retry again");
-    }
-
-    const row = q.rows[0];
-    await writeAction("task_retry_queued", "task", row.id, actor_role, {
-      reason: row.status_reason,
-      retry_attempt: row.retry_attempt,
-      retry_after: row.retry_after
-    });
-
-    return ok(res, row);
-  } catch (e) {
-    return fail(res, 500, "task_retry_failed", e.message);
   }
 });
 

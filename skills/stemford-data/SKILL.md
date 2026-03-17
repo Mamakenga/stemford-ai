@@ -34,7 +34,6 @@ Always check `ok` field before presenting results.
 | Block task | POST | `/tasks/:id/block` |
 | Fail task | POST | `/tasks/:id/fail` |
 | Reopen task | POST | `/tasks/:id/reopen` |
-| Retry failed/blocked task | POST | `/tasks/:id/retry` |
 | Goal ancestry | GET | `/goals/:id/ancestry` |
 | Org chart | GET | `/org/chart` |
 | Validate handoff | POST | `/handoff/validate` |
@@ -56,8 +55,7 @@ backlog → todo → in_progress → done
                  ↕              ↑
               blocked ──────────┘
                  ↓
-              failed ─┬─ (reopen) → todo
-                      └─ (retry)  → todo
+              failed → (reopen) → todo
 ```
 
 ## Approval Classes
