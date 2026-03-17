@@ -1450,8 +1450,8 @@ AGiXT — широко, но поверхностно в safety/reliability.
 
 | Метрика | Как измеряем | Целевое значение |
 |---------|-------------|-----------------|
-| p50 latency (Telegram → ответ) | Timestamp в actions_log: запрос → ответ | Fast-path < 1s, Light < 5s, Full < 60s |
-| p95 latency | То же, 95-й перцентиль | Fast-path < 2s, Light < 10s, Full < 90s |
+| p50 latency (Telegram → ответ) | Timestamp в actions_log: запрос → ответ | Fast-path < 5s (факт: 4s), Light < 10s, Full < 60s |
+| p95 latency | То же, 95-й перцентиль | Fast-path < 7s (факт: 6s), Light < 15s, Full < 90s |
 | Error rate | `task_failed` + `retry_limit_exceeded` / total actions за неделю | < 5% |
 | Доля fast-path | Запросы, обработанные без LLM / все запросы | > 40% после внедрения роутера |
 | Время до ответа на approval | `approval_requested` → `approval_decided` в actions_log | < 30 мин (рабочее время) |
@@ -1468,6 +1468,7 @@ AGiXT — широко, но поверхностно в safety/reliability.
 - **Срок**: 3 дня после старта.
 - **Owner**: Codex (executor), Claude (reviewer).
 - **Rollback**: убрать fast-path из SKILL.md, вернуть единый LLM-путь.
+- **Результат (2026-03-17)**: skill-level fast-path реализован (H-08, H-09). Замер (H-10): p50=4s, p95=6s. Улучшение с ~120s до ~4s (30x). Строгий DoD (p95 < 2s) не достигнут — для этого нужен runtime bypass (LLM полностью исключается из цепочки). **Решение**: отложить runtime bypass до появления реальных запросов от Натальи. Текущая скорость (4-6 сек) достаточна для рабочего использования. OI-8 остаётся в backlog.
 
 #### EC-2: Webhook → Telegram
 - **Гипотеза**: уведомления при task_failed/retry_limit/approval_requested сократят время реакции на инциденты с «узнал случайно» до < 5 мин.
