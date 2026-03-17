@@ -637,7 +637,7 @@ P2 items: pending
 ## H-2026-03-17-23
 Role: Codex=Executor, Claude=Reviewer
 Scope: Follow-up to H-22 P2-a/P2-b — compaction label clarity + safe topic search
-Commits: pending
+Commits: bf759a1
 Changes:
 - Updated `app/control-api/server.js`:
   - added helper `escapeLikePattern(...)` to escape `\`, `%`, `_` for SQL LIKE/ILIKE patterns;
