@@ -524,7 +524,7 @@ P2 items: none — H-17 P2-a/P2-b fully closed via H-18/H-19; VPS smoke PASS=6 F
 ## H-2026-03-17-20
 Role: Codex=Executor, Claude=Reviewer
 Scope: §29.4.6 JSON-log viewer — add `/actions/feed` endpoint + skill/docs wiring
-Commits: pending
+Commits: 9e81239
 Changes:
 - Added `GET /actions/feed` in `app/control-api/server.js`:
   - query params: `limit` (default 20, max 100), `format` (`human|json`), optional filters `action_type`, `actor_role`;
