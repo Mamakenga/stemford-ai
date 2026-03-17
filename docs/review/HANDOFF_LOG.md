@@ -133,7 +133,7 @@ P2 items: pending
 ## H-2026-03-17-06
 Role: Codex=Executor, Claude=Reviewer
 Scope: Follow-up to Claude P2: log retry_limit_exceeded in actions_log
-Commits: pending
+Commits: a4ab705
 Changes:
 - Updated `POST /tasks/:id/retry` in `app/control-api/server.js`.
 - When retry limit is hit, API now writes:
