@@ -1,0 +1,13 @@
+[Unit]
+Description=Stemford stalled task watchdog
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=stemford
+Group=stemford
+WorkingDirectory=/opt/stemford/app/control-api
+EnvironmentFile=/opt/stemford/run/.env
+ExecStart=/opt/stemford/app/control-api/scripts/stall_watchdog.sh
+NoNewPrivileges=true
+

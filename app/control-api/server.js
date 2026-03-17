@@ -149,11 +149,30 @@ app.get("/tasks", async (req, res) => {
     ${where.length ? "where " + where.join(" and ") : ""}
     order by due_at nulls last, id
   `;
+  const legacySql = `
+    select id,title,primary_goal_id,status,assignee,due_at
+    from tasks
+    ${where.length ? "where " + where.join(" and ") : ""}
+    order by due_at nulls last, id
+  `;
 
   try {
     const q = await pool.query(sql, vals);
     ok(res, { count: q.rowCount, tasks: q.rows });
   } catch (e) {
+    if (e && (e.code === "42703" || String(e.message || "").includes("retry_attempt") || String(e.message || "").includes("retry_after"))) {
+      try {
+        const qLegacy = await pool.query(legacySql, vals);
+        const tasks = qLegacy.rows.map((row) => ({
+          ...row,
+          retry_attempt: 0,
+          retry_after: null,
+        }));
+        return ok(res, { count: qLegacy.rowCount, tasks });
+      } catch (legacyErr) {
+        return fail(res, 500, "tasks_query_failed", legacyErr.message);
+      }
+    }
     fail(res, 500, "tasks_query_failed", e.message);
   }
 });
