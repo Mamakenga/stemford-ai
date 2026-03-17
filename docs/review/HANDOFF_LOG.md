@@ -282,6 +282,6 @@ Open risks:
 - Requires live VPS smoke for DoD: forbidden command per role -> `403` + `tool_access_denied` in `actions_log`.
 Review ask:
 - Validate whitelist boundaries and confirm no regressions for current Telegram bridge flow (`human_telegram` bypass).
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=0
+P1 items: none
+P2 items: none — VPS smoke confirms `403 forbidden` + `tool_access_denied` audit trail for forbidden PMO financial approval request
