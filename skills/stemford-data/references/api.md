@@ -2,6 +2,31 @@
 
 Base URL: `http://127.0.0.1:3210`
 
+## Runtime tool-access enforcement (EC-3)
+
+Control API enforces role-based access for mutating actions.
+If a role tries a forbidden action, API returns:
+
+- HTTP `403`
+- `error.code = "forbidden"`
+- audit record in `actions_log` with `action_type = "tool_access_denied"`
+
+Feature flag:
+- `CONTROL_API_ENFORCE_TOOL_ACCESS=1` (default: enabled)
+- set to `0` for permissive rollback mode
+
+Allowed action keys:
+
+| Role | Allowed |
+|------|---------|
+| orchestrator | `tasks.write`, `tasks.retry`, `approvals.decide`, `approvals.request.*` |
+| strategy | `tasks.write`, `tasks.retry`, `approvals.decide`, `approvals.request.safe_read`, `approvals.request.internal_write`, `approvals.request.external_comm` |
+| finance | `tasks.write`, `tasks.retry`, `approvals.decide`, `approvals.request.safe_read`, `approvals.request.internal_write`, `approvals.request.financial_change` |
+| pmo | `tasks.write`, `tasks.retry`, `approvals.request.safe_read`, `approvals.request.internal_write` |
+
+Compatibility bypass:
+- `human_telegram` keeps access for current Telegram bridge commands.
+
 ---
 
 ## GET /tasks

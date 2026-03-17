@@ -249,3 +249,39 @@ Review ask:
 Verdict: P1=0, P2=1
 P1 items: none
 P2 items: P2-a — EC-1 DoD not met (p95=6s vs target <2s). Next step: runtime-level fast-path bypass in telegram_bridge (OI-8). Approved.
+
+---
+
+## H-2026-03-17-11
+Role: Codex=Executor, Claude=Reviewer
+Scope: EC-3 — runtime per-agent tool access enforcement in Control API
+Commits: pending
+Changes:
+- Added deterministic role/action whitelist in `app/control-api/server.js`.
+- Added helper `requireToolAccess(...)` with:
+  - feature flag `CONTROL_API_ENFORCE_TOOL_ACCESS` (default ON),
+  - compatibility bypass for `human_telegram`,
+  - deny path: `403 forbidden` + `actions_log` record `tool_access_denied`.
+- Enforced checks on mutating routes:
+  - `POST /tasks`
+  - `POST /tasks/:id/claim`
+  - `POST /tasks/:id/complete`
+  - `POST /tasks/:id/block`
+  - `POST /tasks/:id/fail`
+  - `POST /tasks/:id/reopen`
+  - `POST /tasks/:id/retry`
+  - `POST /approvals/request` (by `requested_by_role` + `action_class`)
+  - `POST /approvals/decide` (by `decided_by_role`)
+- Updated skill docs:
+  - `skills/stemford-data/SKILL.md` — added `403 forbidden` note.
+  - `skills/stemford-data/references/api.md` — added EC-3 matrix + rollback flag.
+Checks:
+- `node --check app/control-api/server.js` passed.
+- Manual diff review: only access control + docs touched.
+Open risks:
+- Requires live VPS smoke for DoD: forbidden command per role -> `403` + `tool_access_denied` in `actions_log`.
+Review ask:
+- Validate whitelist boundaries and confirm no regressions for current Telegram bridge flow (`human_telegram` bypass).
+Verdict: pending
+P1 items: pending
+P2 items: pending

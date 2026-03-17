@@ -8,6 +8,7 @@ const MAX_RETRY_ATTEMPTS = (() => {
   const raw = Number(process.env.TASK_MAX_RETRY_ATTEMPTS || 5);
   return Number.isInteger(raw) && raw > 0 ? raw : 5;
 })();
+const CONTROL_API_ENFORCE_TOOL_ACCESS = String(process.env.CONTROL_API_ENFORCE_TOOL_ACCESS || "1") !== "0";
 
 const app = express();
 app.use(express.json());
@@ -187,6 +188,41 @@ const DEFAULT_APPROVER = {
   financial_change: "finance",
   policy_change: "orchestrator",
 };
+const TOOL_ACCESS_BYPASS_ROLES = new Set(["human_telegram"]);
+const ROLE_ACTION_WHITELIST = {
+  orchestrator: new Set([
+    "tasks.write",
+    "tasks.retry",
+    "approvals.decide",
+    "approvals.request.safe_read",
+    "approvals.request.internal_write",
+    "approvals.request.external_comm",
+    "approvals.request.financial_change",
+    "approvals.request.policy_change",
+  ]),
+  strategy: new Set([
+    "tasks.write",
+    "tasks.retry",
+    "approvals.decide",
+    "approvals.request.safe_read",
+    "approvals.request.internal_write",
+    "approvals.request.external_comm",
+  ]),
+  finance: new Set([
+    "tasks.write",
+    "tasks.retry",
+    "approvals.decide",
+    "approvals.request.safe_read",
+    "approvals.request.internal_write",
+    "approvals.request.financial_change",
+  ]),
+  pmo: new Set([
+    "tasks.write",
+    "tasks.retry",
+    "approvals.request.safe_read",
+    "approvals.request.internal_write",
+  ]),
+};
 
 function id(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
@@ -204,6 +240,36 @@ async function writeAction(actionType, entityType, entityId, actorRole, payload)
   }
 }
 
+async function requireToolAccess(res, roleRaw, actionKey, ctx = {}) {
+  const role = String(roleRaw || "").trim();
+  if (!role) {
+    fail(res, 400, "validation_error", "actor role is required");
+    return false;
+  }
+
+  if (!CONTROL_API_ENFORCE_TOOL_ACCESS) return true;
+  if (TOOL_ACCESS_BYPASS_ROLES.has(role)) return true;
+
+  const whitelist = ROLE_ACTION_WHITELIST[role];
+  const hasAccess = !!whitelist && whitelist.has(actionKey);
+
+  if (hasAccess) return true;
+
+  await writeAction(
+    "tool_access_denied",
+    ctx.entity_type || "policy",
+    String(ctx.entity_id || actionKey),
+    role,
+    {
+      action_key: actionKey,
+      reason: whitelist ? "action_not_allowed_for_role" : "unknown_role",
+    }
+  );
+
+  fail(res, 403, "forbidden", `role '${role}' is not allowed to perform '${actionKey}'`);
+  return false;
+}
+
 app.post("/approvals/request", async (req, res) => {
   const { action_class, entity_type, entity_id, requested_by_role, approver_role, reason } = req.body || {};
 
@@ -218,6 +284,13 @@ app.post("/approvals/request", async (req, res) => {
   if (!effectiveApprover) {
     return fail(res, 400, "validation_error", `no approver policy for action_class=${action_class}`);
   }
+  const allowed = await requireToolAccess(
+    res,
+    requested_by_role,
+    `approvals.request.${action_class}`,
+    { entity_type, entity_id }
+  );
+  if (!allowed) return;
 
   const approval_id = id("apr");
 
@@ -271,6 +344,13 @@ app.post("/approvals/decide", async (req, res) => {
   if (!["approved","rejected"].includes(decision)) {
     return fail(res, 400, "validation_error", "decision must be approved or rejected");
   }
+  const allowed = await requireToolAccess(
+    res,
+    decided_by_role,
+    "approvals.decide",
+    { entity_type: "approval", entity_id: approval_id }
+  );
+  if (!allowed) return;
 
   try {
     const q = await pool.query(
@@ -303,6 +383,15 @@ app.post("/tasks", async (req, res) => {
   if (!title || !primary_goal_id || !assignee || !actor_role) {
     return fail(res, 400, "validation_error", "title, primary_goal_id, assignee, actor_role are required");
   }
+  {
+    const allowed = await requireToolAccess(
+      res,
+      actor_role,
+      "tasks.write",
+      { entity_type: "task", entity_id: "new" }
+    );
+    if (!allowed) return;
+  }
 
   try {
     const taskId = id("tg");
@@ -332,6 +421,15 @@ app.post("/tasks/:id/claim", async (req, res) => {
 
   if (!actor_role) {
     return fail(res, 400, "bad_request", "actor_role is required");
+  }
+  {
+    const allowed = await requireToolAccess(
+      res,
+      actor_role,
+      "tasks.write",
+      { entity_type: "task", entity_id: taskId }
+    );
+    if (!allowed) return;
   }
 
   try {
@@ -395,6 +493,15 @@ app.post("/tasks/:id/complete", async (req, res) => {
   if (!actor_role) {
     return fail(res, 400, "bad_request", "actor_role is required");
   }
+  {
+    const allowed = await requireToolAccess(
+      res,
+      actor_role,
+      "tasks.write",
+      { entity_type: "task", entity_id: taskId }
+    );
+    if (!allowed) return;
+  }
 
   try {
     const q = await pool.query(
@@ -433,6 +540,15 @@ app.post("/tasks/:id/block", async (req, res) => {
   if (!actor_role) {
     return fail(res, 400, "validation_error", "actor_role is required");
   }
+  {
+    const allowed = await requireToolAccess(
+      res,
+      actor_role,
+      "tasks.write",
+      { entity_type: "task", entity_id: taskId }
+    );
+    if (!allowed) return;
+  }
   try {
     const q = await pool.query(
       `update tasks
@@ -460,6 +576,15 @@ app.post("/tasks/:id/fail", async (req, res) => {
   if (!actor_role) {
     return fail(res, 400, "validation_error", "actor_role is required");
   }
+  {
+    const allowed = await requireToolAccess(
+      res,
+      actor_role,
+      "tasks.write",
+      { entity_type: "task", entity_id: taskId }
+    );
+    if (!allowed) return;
+  }
   try {
     const q = await pool.query(
       `update tasks
@@ -486,6 +611,15 @@ app.post("/tasks/:id/reopen", async (req, res) => {
   const { actor_role } = req.body || {};
   if (!actor_role) {
     return fail(res, 400, "validation_error", "actor_role is required");
+  }
+  {
+    const allowed = await requireToolAccess(
+      res,
+      actor_role,
+      "tasks.write",
+      { entity_type: "task", entity_id: taskId }
+    );
+    if (!allowed) return;
   }
 
   try {
@@ -519,6 +653,15 @@ app.post("/tasks/:id/retry", async (req, res) => {
 
   if (!actor_role) {
     return fail(res, 400, "validation_error", "actor_role is required");
+  }
+  {
+    const allowed = await requireToolAccess(
+      res,
+      actor_role,
+      "tasks.retry",
+      { entity_type: "task", entity_id: taskId }
+    );
+    if (!allowed) return;
   }
 
   let retryAfter = null;

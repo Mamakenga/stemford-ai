@@ -48,6 +48,7 @@ Always check `ok` field before presenting results.
 
 Four agent roles exist: `orchestrator`, `strategy`, `finance`, `pmo`.
 Always use `actor_role` from this set when creating/claiming/completing tasks.
+If role/action is forbidden by runtime policy, API returns `403` with `error.code = "forbidden"`.
 
 ## Task Lifecycle
 
