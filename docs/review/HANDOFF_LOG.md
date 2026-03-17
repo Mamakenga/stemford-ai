@@ -1,4 +1,4 @@
-# HANDOFF LOG
+﻿# HANDOFF LOG
 
 Single source of truth for every Executor/Reviewer cycle.
 
@@ -12,12 +12,12 @@ Role: Codex=Executor, Claude=Reviewer  (or vice versa)
 Scope: <short description>
 Commits: <sha list>
 Changes: <what was changed>
-Checks: <what was verified — tests, smoke, logs>
+Checks: <what was verified вЂ” tests, smoke, logs>
 Open risks: <what remains risky or unverified>
 Review ask: <specific focus for reviewer>
-Verdict: <P1=N, P2=N — filled by Reviewer>
+Verdict: <P1=N, P2=N вЂ” filled by Reviewer>
 P1 items: <list, or "none">
-P2 items: <list — goes to backlog>
+P2 items: <list вЂ” goes to backlog>
 ```
 
 ## Rules
@@ -25,7 +25,7 @@ P2 items: <list — goes to backlog>
 1. **Every commit** that is part of a handoff includes `Handoff: H-...` in the commit message.
 2. **Merge gate**: merge to main only when the Verdict line reads `P1=0`.
 3. **Deploy gate**: after merge, a separate entry in DEPLOY_LOG.md with sha, migrate, restart, smoke results.
-4. **Reviewer** appends the Verdict block — does not modify Changes/Checks/Open risks.
+4. **Reviewer** appends the Verdict block вЂ” does not modify Changes/Checks/Open risks.
 
 ---
 
@@ -34,18 +34,18 @@ Role: Codex=Executor, Claude=Reviewer
 Scope: Retry flow + stall watchdog (steps A+B)
 Commits: ebba862, 0fcfced, 3309edb, cfe53fd, 57a9004
 Changes:
-- POST /tasks/:id/retry — two-layer check, MAX_RETRY_ATTEMPTS from env, race condition guard
-- POST /tasks/:id/claim — retry_after barrier (AND retry_after IS NULL OR retry_after <= now())
+- POST /tasks/:id/retry вЂ” two-layer check, MAX_RETRY_ATTEMPTS from env, race condition guard
+- POST /tasks/:id/claim вЂ” retry_after barrier (AND retry_after IS NULL OR retry_after <= now())
 - Migration 007: retry_attempt + retry_after columns, wrapped in BEGIN/COMMIT
 - Migration 008: system_watchdog role
 - Rollback script for 007
-- stall_watchdog.sh — atomic CTE (UPDATE tasks → INSERT actions_log)
+- stall_watchdog.sh вЂ” atomic CTE (UPDATE tasks в†’ INSERT actions_log)
 Checks: node --check OK, VPS smoke (health, db/ping, tasks list), migration applied
 Open risks: rollback script not tested on prod data
 Review ask: retry flow correctness, transaction safety
 Verdict: P1=0, P2=1
 P1 items: none
-P2 items: retry_after barrier in /claim — was already implemented by Codex in 3309edb, confirmed during review
+P2 items: retry_after barrier in /claim вЂ” was already implemented by Codex in 3309edb, confirmed during review
 
 ---
 
@@ -59,10 +59,10 @@ Changes:
 - OPEN_ISSUES.md: closed retry/watchdog items moved to done-block
 Checks: node --check OK, VPS: timer active, service exits 0/SUCCESS
 Open risks: none significant
-Review ask: (a) fallback catches only retry columns? (b) cron→systemd transition correct?
+Review ask: (a) fallback catches only retry columns? (b) cronв†’systemd transition correct?
 Verdict: P1=0, P2=1
 P1 items: none
-P2 items: fallback condition was too broad (42703 catches any missing column) — narrowed to regex check on retry_attempt|retry_after
+P2 items: fallback condition was too broad (42703 catches any missing column) вЂ” narrowed to regex check on retry_attempt|retry_after
 
 ---
 
@@ -72,7 +72,7 @@ Scope: Narrow GET /tasks fallback condition (P2 from H-02)
 Commits: pending (server.js fix applied locally)
 Changes:
 - Fallback condition narrowed: `e.code === "42703" && /retry_attempt|retry_after/i.test(msg)`
-Checks: code review — logic confirmed correct
+Checks: code review вЂ” logic confirmed correct
 Open risks: none
 Review ask: confirm narrowed condition is sufficient
 Verdict: P1=0, P2=0
@@ -83,24 +83,24 @@ P2 items: none
 
 ## H-2026-03-17-04
 Role: Codex=Executor, Claude=Reviewer
-Scope: OI-6 — formalize Role Definition (6 fields) in agent SOUL files
+Scope: OI-6 вЂ” formalize Role Definition (6 fields) in agent SOUL files
 Commits: 87d3d3d
 Changes:
-- Added explicit `Role Definition (6 полей)` blocks to all role profiles:
+- Added explicit `Role Definition (6 РїРѕР»РµР№)` blocks to all role profiles:
   - `agents/orchestrator/SOUL.md`
   - `agents/pmo/SOUL.md`
   - `agents/finance-kpi/SOUL.md`
   - `agents/strategy-gatekeeper/SOUL.md`
 - Each block now defines: Title, Duties, Authority, Boundaries, Standards, Reporting.
 Checks:
-- Presence check by grep: all 4 files contain `Role Definition (6 полей)` section.
+- Presence check by grep: all 4 files contain `Role Definition (6 РїРѕР»РµР№)` section.
 Open risks:
 - Approval Gates progressive weakening (Weeks 1-4 / Month 2-6 / Month 6+) is not yet formalized as a separate policy artifact.
 Review ask:
 - Verify that Duties/Authority/Boundaries are specific enough and non-overlapping across the 4 roles.
 Verdict: P1=0, P2=1
 P1 items: none
-P2 items: clarify Finance escalation path to Human Owner (direct or via Orchestrator?) — follow-up
+P2 items: clarify Finance escalation path to Human Owner (direct or via Orchestrator?) вЂ” follow-up
 
 ---
 
@@ -126,7 +126,7 @@ Review ask:
 - Confirm that ritual scope is sufficient for Stage 5 observability and that exception triggers are correct.
 Verdict: P1=0, P2=1
 P1 items: none
-P2 items: retry_limit_exceeded was missing from writeAction in server.js (audit ritual expected it but it was never emitted) — fixed in H-06
+P2 items: retry_limit_exceeded was missing from writeAction in server.js (audit ritual expected it but it was never emitted) вЂ” fixed in H-06
 
 ---
 
@@ -152,7 +152,7 @@ Review ask:
 - Confirm this closes the P2 mismatch between audit ritual filters and emitted action types.
 Verdict: P1=0, P2=0
 P1 items: none
-P2 items: none — mismatch fully closed
+P2 items: none вЂ” mismatch fully closed
 
 ---
 
@@ -172,19 +172,19 @@ Review ask:
 - Confirm that this closes the remaining H-04 P2 item (Finance escalation path ambiguity).
 Verdict: P1=0, P2=0
 P1 items: none
-P2 items: none — H-04 P2 fully closed
+P2 items: none вЂ” H-04 P2 fully closed
 
 ---
 
 ## H-2026-03-17-08
 Role: Codex=Executor, Claude=Reviewer
-Scope: EC-1 MVP — fast-path router for frequent Telegram read intents in stemford-data skill
+Scope: EC-1 MVP вЂ” fast-path router for frequent Telegram read intents in stemford-data skill
 Commits: 994a742
 Changes:
 - Updated `skills/stemford-data/SKILL.md` with explicit deterministic fast-path section.
 - Added intent matcher rules for:
-  - `покажи открытые задачи` / `что в работе` / `open tasks`
-  - `покажи pending approvals` / `что на одобрении` / `pending approvals`
+  - `РїРѕРєР°Р¶Рё РѕС‚РєСЂС‹С‚С‹Рµ Р·Р°РґР°С‡Рё` / `С‡С‚Рѕ РІ СЂР°Р±РѕС‚Рµ` / `open tasks`
+  - `РїРѕРєР°Р¶Рё pending approvals` / `С‡С‚Рѕ РЅР° РѕРґРѕР±СЂРµРЅРёРё` / `pending approvals`
 - Added exact execution flow and response templates:
   - `/tasks` -> filter `todo|in_progress|blocked`
   - `/approvals/pending` with optional `approver_role`
@@ -201,20 +201,20 @@ Review ask:
 - Confirm trigger set and response templates are sufficient for EC-1 DoD before runtime smoke.
 Verdict: P1=0, P2=1
 P1 items: none
-P2 items: P2-a — expand Intent A triggers: add «какие задачи», «список задач», «задачи» (bare form) to increase fast-path hit rate toward >40% DoD target
+P2 items: P2-a вЂ” expand Intent A triggers: add В«РєР°РєРёРµ Р·Р°РґР°С‡РёВ», В«СЃРїРёСЃРѕРє Р·Р°РґР°С‡В», В«Р·Р°РґР°С‡РёВ» (bare form) to increase fast-path hit rate toward >40% DoD target
 
 ---
 
 ## H-2026-03-17-09
 Role: Codex=Executor, Claude=Reviewer
 Scope: Follow-up to H-08 P2-a - expand Intent A fast-path trigger set
-Commits: pending
+Commits: 24553d7
 Changes:
 - Updated `skills/stemford-data/SKILL.md` Intent A trigger examples.
 - Added three short high-frequency forms:
-  - `какие задачи`
-  - `список задач`
-  - `задачи`
+  - `РєР°РєРёРµ Р·Р°РґР°С‡Рё`
+  - `СЃРїРёСЃРѕРє Р·Р°РґР°С‡`
+  - `Р·Р°РґР°С‡Рё`
 Checks:
 - Manual diff check confirms only trigger list was changed (no execution logic changes).
 Open risks:
