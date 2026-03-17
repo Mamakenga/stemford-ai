@@ -26,3 +26,4 @@
   - S6 forbidden PMO financial command + audit
   - S7 memory cards create/read/maintenance
   - S8 critic class-A request without reason -> denied + audit
+  - S9 critic/check contract (deny path + allow path)

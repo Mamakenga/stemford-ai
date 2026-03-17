@@ -705,3 +705,40 @@ Review ask:
 Verdict: P1=0, P2=0
 P1 items: none
 P2 items: none — hard-policy critic MVP accepted, S8 smoke pass confirmed
+
+---
+
+## H-2026-03-17-25
+Role: Codex=Executor, Claude=Reviewer
+Scope: §29.4 Guarded-profile gate MVP (skill protocol + critic/check smoke contract)
+Commits: pending
+Changes:
+- Updated `skills/stemford-data/SKILL.md`:
+  - added explicit **Guarded Profile Gate** section;
+  - mandatory mutation pipeline:
+    1) deterministic draft,
+    2) confirmation,
+    3) `/critic/check`,
+    4) execute mutation only on `allow:true`,
+    5) deny with reason on `allow:false`;
+  - mapped action keys: `tasks.write`, `tasks.retry`, `approvals.request.<class>`, `approvals.decide`.
+- Updated `skills/stemford-data/references/api.md`:
+  - added recommended Guarded usage for `/critic/check`.
+- Updated smoke:
+  - `app/control-api/scripts/smoke_scenarios.sh`:
+    - new `S9` validates `/critic/check` contract:
+      - deny path: class-A request without reason -> `allow:false`, `critic_reason_required`;
+      - allow path: `tasks.write` -> `allow:true`.
+  - `app/control-api/scripts/README.md`:
+    - coverage list extended with S9.
+Checks:
+- Static review: Guarded profile is now explicit and deterministic in skill contract.
+- Smoke script updated to validate both deny/allow response contract of `/critic/check`.
+Open risks:
+- Guarded profile enforcement is currently at skill/protocol level; direct API clients can still call mutation endpoints without first calling `/critic/check` unless endpoint-level checks are added per mutation.
+Review ask:
+- Confirm this scope is sufficient for §29.4 Guarded MVP and validate S9 expectations.
+- Advise whether next increment should enforce critic gate inside task mutation endpoints (server-level mandatory chain).
+Verdict: pending
+P1 items: pending
+P2 items: pending

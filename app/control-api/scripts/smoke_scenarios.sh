@@ -284,6 +284,27 @@ scenario_8_critic_class_a_reason_required() {
   fi
 }
 
+scenario_9_critic_check_contract() {
+  local resp
+
+  resp="$(curl -sS -X POST "$API_BASE/critic/check" \
+    -H "Content-Type: application/json" \
+    -d '{"actor_role":"orchestrator","action_key":"approvals.request.financial_change","entity_type":"task","entity_id":"smoke_critic_check","action_class":"financial_change"}')"
+  if ! echo "$resp" | jq -e '.ok == true and .data.allow == false and .data.code == "critic_reason_required"' >/dev/null; then
+    log_fail "S9 critic/check deny contract: expected allow=false + critic_reason_required"
+    return
+  fi
+
+  resp="$(curl -sS -X POST "$API_BASE/critic/check" \
+    -H "Content-Type: application/json" \
+    -d '{"actor_role":"orchestrator","action_key":"tasks.write","entity_type":"task","entity_id":"new"}')"
+  if echo "$resp" | jq -e '.ok == true and .data.allow == true' >/dev/null; then
+    log_pass "S9 critic/check contract: deny+allow paths"
+  else
+    log_fail "S9 critic/check allow contract: expected allow=true for tasks.write"
+  fi
+}
+
 echo "Running smoke scenarios against $API_BASE"
 echo "---"
 
@@ -295,6 +316,7 @@ scenario_5_retry_limit "$TASK_ID"
 scenario_6_pmo_forbidden_finance_command
 scenario_7_memory_cards
 scenario_8_critic_class_a_reason_required
+scenario_9_critic_check_contract
 
 echo "---"
 echo "Summary: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"

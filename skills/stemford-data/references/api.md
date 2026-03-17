@@ -83,6 +83,11 @@ Response:
 - `{ ok:true, data:{ allow:true } }` when pass
 - `{ ok:true, data:{ allow:false, code, message } }` when denied
 
+Recommended Guarded usage:
+1. call `/critic/check`;
+2. execute mutation endpoint only when `allow:true`;
+3. if `allow:false`, return deny reason and do not execute.
+
 Audit:
 - denied checks are logged as `action_type='critic_policy_denied'`
 

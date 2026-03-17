@@ -284,3 +284,27 @@ Response template:
 1. For these three intents, do not load `references/api.md` unless API response shape is invalid.
 2. For these three intents, do not switch to broad reasoning: execute API call, format, return.
 3. If API returns `ok:false` or transport error, return short error and then fall back to standard skill flow.
+
+## Guarded Profile Gate (29.4 runtime profile)
+
+Use this mandatory pipeline for mutation intents:
+- create/update/retry/reopen/fail/block task
+- request/decide approval
+
+Pipeline (do not skip steps):
+1. Build deterministic draft (TaskSpecify rules).
+2. Ask confirmation (`Ок?`) before mutation.
+3. Run hard-policy critic check:
+```bash
+curl -s -X POST http://127.0.0.1:3210/critic/check \
+  -H "Content-Type: application/json" \
+  -d '{"actor_role":"orchestrator","action_key":"<target_action_key>","entity_type":"task","entity_id":"<target_id_or_new>","action_class":"<if_approval_action>","approval_id":"<if_decide>","decision":"<if_decide>","reason":"<reason_if_any>"}'
+```
+4. If critic returns `allow:false`, do not execute mutation. Explain deny reason to user.
+5. If critic returns `allow:true`, execute target mutation endpoint.
+
+Target action keys:
+- create/update task flow -> `tasks.write`
+- task retry -> `tasks.retry`
+- approval request -> `approvals.request.<action_class>`
+- approval decision -> `approvals.decide`
