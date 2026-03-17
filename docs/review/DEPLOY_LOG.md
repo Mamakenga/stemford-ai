@@ -119,3 +119,15 @@ Steps:
 - [x] restart stemford-openclaw-runtime
 - [x] smoke: conflict phrase `бюджет на презентацию` -> draft assignee `Finance`
 Result: OK
+
+## D-2026-03-17-10
+Handoff: H-2026-03-17-17
+SHA: b57798f (Cookbook smoke scenarios script)
+Steps:
+- [x] git pull
+- [x] migrate: not needed
+- [x] run `bash ./scripts/smoke_scenarios.sh`
+- [x] smoke summary: `PASS=6 FAIL=0 SKIP=1`
+- [x] passed scenarios: `S1..S6`
+- [x] skipped scenarios: `S7` (memory cards not implemented yet, planned in §29.4.3)
+Result: OK

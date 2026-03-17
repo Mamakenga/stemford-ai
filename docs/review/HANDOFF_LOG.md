@@ -437,7 +437,7 @@ P2 items: none — H-15 P2-a fully closed
 ## H-2026-03-17-17
 Role: Codex=Executor, Claude=Reviewer
 Scope: §29.4.5 Cookbook MVP — add smoke scenarios script
-Commits: pending
+Commits: b57798f
 Changes:
 - Added `app/control-api/scripts/smoke_scenarios.sh`:
   - S1: `GET /tasks` shape check
@@ -450,8 +450,13 @@ Changes:
 - Updated `app/control-api/scripts/README.md` with smoke script usage and scenario list.
 Checks:
 - Manual script review: deterministic PASS/FAIL/SKIP summary, non-zero exit on failures.
+- VPS smoke run (2026-03-17):
+  - `bash ./scripts/smoke_scenarios.sh`
+  - result: `PASS=6 FAIL=0 SKIP=1`
+  - passed: S1..S6
+  - skipped: S7 (memory cards not implemented yet)
 Open risks:
-- Script not executed yet in this thread; live run on VPS pending.
+- Script creates smoke entities in production DB (safe, but accumulates `smoke_*` records over time).
 Review ask:
 - Validate script safety/usability for post-deploy smoke and confirm scenario coverage vs §29.4.5.
 Verdict: pending
