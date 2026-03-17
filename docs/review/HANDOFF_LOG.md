@@ -506,6 +506,11 @@ Changes:
   - cleanup deletes for `tasks` / `approval_requests` / `actions_log`.
 Checks:
 - Static script review: all previous `:'task_id'` / `:'ent_id'` placeholders removed.
+- VPS smoke run (2026-03-17):
+  - `bash ./scripts/smoke_scenarios.sh`
+  - result: `PASS=6 FAIL=0 SKIP=1`
+  - passed: S1..S6
+  - skipped: S7 (memory cards not implemented yet)
 Open risks:
 - Uses escaped SQL literals instead of true prepared statements (safe for current smoke IDs, but still string-based SQL generation).
 Review ask:

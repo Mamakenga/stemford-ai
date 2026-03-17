@@ -131,3 +131,15 @@ Steps:
 - [x] passed scenarios: `S1..S6`
 - [x] skipped scenarios: `S7` (memory cards not implemented yet, planned in §29.4.3)
 Result: OK
+
+## D-2026-03-17-11
+Handoff: H-2026-03-17-19
+SHA: 95029c2 (includes `faa180b` smoke compatibility fix)
+Steps:
+- [x] git pull
+- [x] migrate: not needed
+- [x] run `bash ./scripts/smoke_scenarios.sh`
+- [x] smoke summary: `PASS=6 FAIL=0 SKIP=1`
+- [x] passed scenarios: `S1..S6`
+- [x] skipped scenarios: `S7` (memory cards not implemented yet, planned in §29.4.3)
+Result: OK
