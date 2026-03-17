@@ -160,7 +160,9 @@ app.get("/tasks", async (req, res) => {
     const q = await pool.query(sql, vals);
     ok(res, { count: q.rowCount, tasks: q.rows });
   } catch (e) {
-    if (e && (e.code === "42703" || String(e.message || "").includes("retry_attempt") || String(e.message || "").includes("retry_after"))) {
+    const msg = String(e?.message || "");
+    const missingRetryColumn = e?.code === "42703" && /retry_attempt|retry_after/i.test(msg);
+    if (missingRetryColumn) {
       try {
         const qLegacy = await pool.query(legacySql, vals);
         const tasks = qLegacy.rows.map((row) => ({
