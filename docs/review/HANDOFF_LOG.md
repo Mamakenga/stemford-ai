@@ -628,9 +628,11 @@ Review ask:
 - Validate memory route contracts, safety rules (sensitive TTL/content markers), and whitelist model.
 - Validate maintenance script/systemd units and confirm no policy regressions from adding `system_watchdog -> memory.write`.
 - Confirm S7 implementation and cleanup behavior are production-safe for repeated smoke runs.
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=2
+P1 items: none
+P2 items:
+- Compaction label should be `[truncated]` instead of `[summary]` for accuracy.
+- Escape `%` / `_` in `topic ILIKE` filter to avoid wildcard interpretation from user input.
 
 ---
 
@@ -653,6 +655,6 @@ Open risks:
 - Existing cards already compacted with old marker `[summary]` remain as-is (acceptable legacy, no functional break).
 Review ask:
 - Confirm H-22 P2-a/P2-b are fully closed with this follow-up and that the LIKE escaping strategy is correct for PostgreSQL.
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=0
+P1 items: none
+P2 items: none — H-22 P2-a/P2-b fully closed by H-23

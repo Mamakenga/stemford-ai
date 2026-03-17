@@ -165,3 +165,26 @@ Steps:
 - [x] smoke: `GET /actions/feed?limit=5&format=human` returns `HTTP:200`, `ok:true`
 - [x] smoke: `data.items[*].text` localized in Russian (`запросил одобрение`, `создал`, `доступ запрещён`, `достиг лимита повторов`)
 Result: OK
+
+## D-2026-03-17-14
+Handoff: H-2026-03-17-22
+SHA: 6179960 (includes `41a3a2b` memory cards MVP + maintenance + S7 smoke)
+Steps:
+- [x] git pull
+- [x] migrate: `009_memory_cards.sql` applied
+- [x] restart `stemford-control-api`
+- [x] first smoke attempt failed with transient connect race (`curl: (7)` right after restart)
+- [x] service status verified active/listening on `127.0.0.1:3210`
+- [x] smoke rerun: `PASS=7 FAIL=0 SKIP=0`
+Result: OK
+
+## D-2026-03-17-15
+Handoff: H-2026-03-17-23
+SHA: db691f0 (includes `bf759a1` P2 follow-up + H-23 finalize)
+Steps:
+- [x] git pull
+- [x] migrate: not needed
+- [x] restart `stemford-control-api`
+- [x] first smoke attempt failed with transient connect race (`curl: (7)` right after restart)
+- [x] smoke rerun after short wait: `PASS=7 FAIL=0 SKIP=0`
+Result: OK
