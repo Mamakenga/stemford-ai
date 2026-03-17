@@ -631,3 +631,28 @@ Review ask:
 Verdict: pending
 P1 items: pending
 P2 items: pending
+
+---
+
+## H-2026-03-17-23
+Role: Codex=Executor, Claude=Reviewer
+Scope: Follow-up to H-22 P2-a/P2-b — compaction label clarity + safe topic search
+Commits: pending
+Changes:
+- Updated `app/control-api/server.js`:
+  - added helper `escapeLikePattern(...)` to escape `\`, `%`, `_` for SQL LIKE/ILIKE patterns;
+  - changed `GET /memory/cards` topic filter from:
+    - `topic ilike $N`
+    to:
+    - `topic ilike $N escape '\'` with escaped input;
+  - changed maintenance compaction marker from `' ... [summary]'` to `' ... [truncated]'`;
+  - updated idempotency guard accordingly (`content not like '%[truncated]'`).
+Checks:
+- `node --check app/control-api/server.js` passed.
+Open risks:
+- Existing cards already compacted with old marker `[summary]` remain as-is (acceptable legacy, no functional break).
+Review ask:
+- Confirm H-22 P2-a/P2-b are fully closed with this follow-up and that the LIKE escaping strategy is correct for PostgreSQL.
+Verdict: pending
+P1 items: pending
+P2 items: pending

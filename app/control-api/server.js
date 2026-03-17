@@ -100,6 +100,10 @@ function parseIsoDatetime(raw) {
   return d;
 }
 
+function escapeLikePattern(raw) {
+  return String(raw || "").replace(/[\\%_]/g, "\\$&");
+}
+
 function includesSensitiveMarkers(text) {
   const value = String(text || "");
   return /(password|passwd|token|secret|api[_ -]?key|парол|токен|секрет|ключ\s*api)/i.test(value);
@@ -515,8 +519,8 @@ app.get("/memory/cards", async (req, res) => {
     where.push(`agent_role = $${vals.length}`);
   }
   if (req.query.topic) {
-    vals.push(`%${String(req.query.topic).trim()}%`);
-    where.push(`topic ilike $${vals.length}`);
+    vals.push(`%${escapeLikePattern(String(req.query.topic).trim())}%`);
+    where.push(`topic ilike $${vals.length} escape '\\'`);
   }
   if (!includeExpired) {
     where.push(`expires_at > now()`);
@@ -571,11 +575,11 @@ app.post("/memory/cards/maintenance", async (req, res) => {
       ),
       compacted as (
         update memory_cards
-        set content = left(content, 240) || ' ... [summary]'
+        set content = left(content, 240) || ' ... [truncated]'
         where is_sensitive = false
           and created_at < now() - interval '3 days'
           and char_length(content) > 260
-          and content not like '%[summary]'
+          and content not like '%[truncated]'
         returning id
       )
       select
