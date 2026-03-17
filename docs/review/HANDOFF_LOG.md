@@ -98,9 +98,9 @@ Open risks:
 - Approval Gates progressive weakening (Weeks 1-4 / Month 2-6 / Month 6+) is not yet formalized as a separate policy artifact.
 Review ask:
 - Verify that Duties/Authority/Boundaries are specific enough and non-overlapping across the 4 roles.
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=1
+P1 items: none
+P2 items: clarify Finance escalation path to Human Owner (direct or via Orchestrator?) — follow-up
 
 ---
 
@@ -124,9 +124,9 @@ Open risks:
 - First weekly run by operations team is not yet executed (process defined, first execution pending).
 Review ask:
 - Confirm that ritual scope is sufficient for Stage 5 observability and that exception triggers are correct.
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=1
+P1 items: none
+P2 items: retry_limit_exceeded was missing from writeAction in server.js (audit ritual expected it but it was never emitted) — fixed in H-06
 
 ---
 
@@ -150,6 +150,6 @@ Open risks:
 - none
 Review ask:
 - Confirm this closes the P2 mismatch between audit ritual filters and emitted action types.
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=0
+P1 items: none
+P2 items: none — mismatch fully closed
