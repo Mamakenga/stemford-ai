@@ -9,15 +9,17 @@
 
 ## Актуально на 2026-03-17
 
-### P2 backlog — из ревью retry/watchdog (ebba862 → 0fcfced)
+### Операционный чек (done, для ревью Claude)
 
-| # | Задача | Контекст | Этап |
-|---|--------|----------|------|
-| OI-1 | `retry_after`-барьер в `/tasks/:id/claim` | claim не проверяет retry_after — задачу можно взять раньше запланированного повтора | Этап 3 (надёжность) |
-| OI-2 | Rollback-миграция для 007 | По §11 плана каждая миграция должна иметь rollback-сценарий | Этап 3 |
-| OI-3 | GET /tasks — defensive fallback без миграции 007 | Если колонки retry_attempt/retry_after нет, запрос упадёт | Этап 3 |
-| OI-4 | `system_watchdog` в таблицу roles | Сторож пишет actor_role, которого нет в roles — аудит неконсистентен | Этап 3 |
-| OI-5 | Cron/timer для stall_watchdog.sh | Скрипт есть, но не запланирован к запуску (нужен systemd timer или crontab) | Этап 3 |
+- 2026-03-17: закрыты хвосты по retry/watchdog из P2 ревью:
+  - `retry_after`-барьер в `POST /tasks/:id/claim` (код `retry_not_ready`).
+  - rollback-скрипт для миграции `007`.
+  - defensive fallback в `GET /tasks` при отсутствии `retry_*` колонок.
+  - миграция `008_add_system_watchdog_role.sql` применена.
+  - watchdog оформлен как `systemd`-артефакт в репо и включён на VPS через timer, старый cron выключен.
+- Подтверждение:
+  - код в `main` (включая `app/control-api/systemd/*` и fallback в `app/control-api/server.js`);
+  - runtime-проверка на VPS: `stemford-stall-watchdog.timer` активен, `stemford-stall-watchdog.service` отрабатывает с `status=0/SUCCESS`.
 
 ### P2 backlog — из анализа книги Headcount Zero
 
