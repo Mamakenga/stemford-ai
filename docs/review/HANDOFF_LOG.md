@@ -413,7 +413,7 @@ P2 items: add deterministic conflict-resolution rule for multi-match keyword cas
 ## H-2026-03-17-16
 Role: Codex=Executor, Claude=Reviewer
 Scope: Follow-up to H-15 P2-a — deterministic assignee conflict resolution
-Commits: pending
+Commits: adcc467
 Changes:
 - Updated `skills/stemford-data/SKILL.md` TaskSpecify-lite section:
   - added explicit tie-break rule when multiple keyword groups match;
@@ -421,6 +421,9 @@ Changes:
   - added example: "бюджет на презентацию" -> `finance`.
 Checks:
 - Manual review: conflict resolution is now explicit and deterministic; no effect on existing fast-path read intents.
+- Telegram smoke (2026-03-17):
+  - input: `создай задачу: согласовать бюджет на презентацию для родителей`
+  - output draft: `исполнитель: Finance` (expected by tie-break rule).
 Open risks:
 - Runtime behavior still depends on skill adherence in model/session context.
 Review ask:

@@ -109,3 +109,13 @@ Steps:
 - [x] runtime restart
 - [x] second smoke passed: bot returns draft + confirmation `Ок?`
 Result: OK (behavior fixed after session reset; latency remains high and tracked in handoff)
+
+## D-2026-03-17-09
+Handoff: H-2026-03-17-16
+SHA: adcc467 (TaskSpecify-lite tie-break rule)
+Steps:
+- [x] git pull
+- [x] sync skill file to workspace path
+- [x] restart stemford-openclaw-runtime
+- [x] smoke: conflict phrase `бюджет на презентацию` -> draft assignee `Finance`
+Result: OK
