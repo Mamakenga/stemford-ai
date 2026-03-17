@@ -428,6 +428,6 @@ Open risks:
 - Runtime behavior still depends on skill adherence in model/session context.
 Review ask:
 - Confirm that H-15 P2-a is fully closed with the new deterministic tie-break rule.
-Verdict: pending
-P1 items: pending
-P2 items: pending
+Verdict: P1=0, P2=0
+P1 items: none
+P2 items: none — H-15 P2-a fully closed
