@@ -711,7 +711,7 @@ P2 items: none — hard-policy critic MVP accepted, S8 smoke pass confirmed
 ## H-2026-03-17-25
 Role: Codex=Executor, Claude=Reviewer
 Scope: §29.4 Guarded-profile gate MVP (skill protocol + critic/check smoke contract)
-Commits: pending
+Commits: 42c4c6f
 Changes:
 - Updated `skills/stemford-data/SKILL.md`:
   - added explicit **Guarded Profile Gate** section;
