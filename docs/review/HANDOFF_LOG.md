@@ -584,7 +584,7 @@ P2 items: timestamp in human feed uses UTC `HH:MM`; backlog for user-local time 
 ## H-2026-03-17-22
 Role: Codex=Executor, Claude=Reviewer
 Scope: §29.3 Memory cards MVP — DB schema, API routes, maintenance automation, smoke S7
-Commits: pending (will be updated after commit)
+Commits: 41a3a2b
 Changes:
 - Added migration `app/control-api/migrations/009_memory_cards.sql`:
   - new table `memory_cards` with TTL (`expires_at`), sensitive flag, optional `source_action_id` link to `actions_log`;
