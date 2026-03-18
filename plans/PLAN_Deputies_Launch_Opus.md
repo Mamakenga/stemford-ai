@@ -181,24 +181,29 @@ Telegram ←→ Control API (всегда онлайн, код, не AI)
                         └→ PMO (импульсный)
 ```
 
-Все четыре агента равны — одинаковый жизненный цикл: спит → разбужен → работает → засыпает.
-Нет привилегированного always-on агента.
+Orchestrator — координатор, но **не always-on процесс**. Его жизненный цикл такой же
+импульсный (спит → разбужен → работает → засыпает), но у него особая роль:
+Control API будит его для любого сообщения, не попавшего в Command/Query/Dispatch.
+Strategy, Finance, PMO будятся только через orchestrator или dispatch.
+
+**Целевая архитектура**: Control API (Telegram-бот, always-on, код) + orchestrator
+(импульсный AI-координатор) + специализированные замы (импульсные AI-исполнители).
 
 ### Четыре plane Control API
 
 | Plane | Что делает | Как распознаёт | Принцип |
 |-------|-----------|----------------|---------|
-| **Command** | CEO-команды: стоп, пауза, resume | Слэш-команда (`/стоп`) или exact match (`стоп`) | Строгое распознавание. Никакого угадывания |
-| **Query** | Справки из базы: статус, список задач | Слэш-команда (`/статус A3`) или exact match | Только чтение. Ноль мутаций, ноль токенов |
-| **Dispatch** | Диспетчерская: зам закончил → кого будить | Событие завершения задачи (внутренний trigger) | Маршрут из данных (`handoff_policies`, `on_complete_wake_role`), не из if/else в коде |
+| **Command** | CEO-команды: стоп, пауза, resume | Только слэш-команда (`/стоп`, `/пауза`) — mutation требует явного префикса | Строгое распознавание. Никакого угадывания |
+| **Query** | Справки из базы: статус, список задач | Слэш-команда (`/статус A3`) или exact match (read-only, безопасно) | Только чтение. Ноль мутаций, ноль токенов |
+| **Dispatch** | Диспетчерская: зам закончил → кого будить | Событие завершения задачи (внутренний trigger) | Маршрут из данных: `handoff_policies (source_role, event_type, condition_expr → target_role)` + shortcut `on_complete_wake_role`. Поддерживает ветвление по условиям |
 | **Reasoning** | Всё, что не попало выше | Отсутствие совпадения в Command/Query | Forward to orchestrator целиком |
 
 ### Пять защит от хрупкости
 
-1. **Строгое распознавание команд.** Слэш-команды (`/стоп`, `/пауза strategy`) — гарантированное распознавание. Exact match без слэша (`стоп`, `обстановка`) — тоже работает. Но «может стоит остановиться?» — это НЕ команда, это → Reasoning Plane.
+1. **Строгое распознавание команд.** Mutation-команды (`/стоп`, `/пауза strategy`) — **только через слэш-префикс**, чтобы исключить ложное срабатывание в живом чате. Read-only запросы (`/статус`, `/обстановка`) допускают exact match без слэша. «Может стоит остановиться?» — это НЕ команда, это → Reasoning Plane.
 2. **Малейшая неоднозначность → orchestrator.** Если сообщение не попало ни в Command, ни в Query — не пытаться угадать в коде. Сразу forward to orchestrator.
-3. **Диспетчерская в данных, не в коде.** Маршруты хранятся в `handoff_policies` и поле `on_complete_wake_role` в задаче. Добавление нового маршрута = INSERT в таблицу, не правка if/else.
-4. **Идемпотентность и дедупликация.** Каждое событие имеет `event_id`. Повторный webhook не запускает дубль. `trigger_id UNIQUE` в `agent_runs`.
+3. **Диспетчерская в данных, не в коде.** Маршруты хранятся в таблице `handoff_policies` с условными правилами: `(source_role, event_type, condition_expr) → target_role, priority`. Поле `on_complete_wake_role` в задаче — shortcut для простых случаев. Для ветвлений (например, «KPI-риск высокий → сразу CEO gate») — condition_expr в handoff_policies. Добавление нового маршрута = INSERT в таблицу, не правка if/else.
+4. **Идемпотентность и дедупликация.** Каждое событие имеет `event_id`. Повторный webhook не запускает дубль. Дедупликация — через отдельную таблицу `processed_triggers (trigger_id UNIQUE, processed_at)`. В `agent_runs` поле `trigger_id` — NOT NULL, но не UNIQUE: один триггер может порождать несколько attempt (retry с новым `attempt_number`).
 5. **Всё в actions_log с correlation_id.** Любое действие любого plane — запись в лог. Один correlation_id на весь цикл от сообщения Натальи до ответа.
 
 ### Четыре слоя (реализация)
@@ -273,7 +278,7 @@ Node.js модуль в составе Control API (не отдельный пр
 ### Что heartbeat-сервис делает (11 обязанностей)
 
 1. **Принимает триггеры** — assignment, timer, on_demand, mention.
-2. **Дедуплицирует** — `trigger_id UNIQUE`: один trigger → один run. Повторный webhook → skip.
+2. **Дедуплицирует** — проверяет `processed_triggers` (trigger_id UNIQUE). Новый trigger → INSERT + run. Повторный webhook → skip. Retry после ошибки → новый attempt (тот же trigger_id, новый attempt_number в agent_runs).
 3. **Проверяет параллелизм** — max 1 run на роль. Если занят → очередь или coalesce.
 4. **Проверяет среду (preflight)** — OpenClaw CLI, SOUL.md, SKILL.md, DB, Telegram bridge. Не готово → run = error с причиной.
 5. **Создаёт agent_run** — запись в DB со статусом, trigger, correlation_id.
@@ -641,7 +646,7 @@ CREATE TABLE agent_task_sessions (
 
 ### Этап 1 (вместе с runtime foundation)
 
-1. **Дедупликация триггеров.** `trigger_id UNIQUE` в `agent_runs`. Один trigger → один run.
+1. **Дедупликация триггеров.** Отдельная таблица `processed_triggers (trigger_id UNIQUE)`. В `agent_runs` — trigger_id NOT NULL + attempt_number. Один trigger → один первый run, retry → новый attempt.
 2. **Лимит параллелизма.** Max 1 run на роль одновременно. Второй запрос → очередь или coalesce.
 3. **Идемпотентность мутаций.** `checkout`, `complete`, `approve` безопасны при повторе.
 4. **Сквозной correlation_id.** Один ID: trigger → agent_run → actions_log → telegram.
@@ -768,10 +773,15 @@ npm install -g @anthropic-ai/claude-code
 claude --version
 
 # Режим работы — headless, без интерактивного терминала
+# Используем -p (pipe mode) для non-interactive запуска.
+# Permissions: настроить allowlist в ~/.claude/settings.json
+# (разрешить только чтение файлов, git diff, запуск тестов).
+# НИКОГДА не использовать --dangerously-skip-permissions в прод-контуре.
+
 # Reviewer:
-claude --model opus /review --dangerously-skip-permissions
+claude -p "Review this diff" --model opus --output-format text --allowedTools "Read,Bash(git diff)"
 # Deployer:
-claude --model sonnet /deploy --dangerously-skip-permissions
+claude -p "Deploy approved changes" --model sonnet --output-format text --allowedTools "Read,Bash(git),Bash(npm test)"
 ```
 
 **Codex CLI:**
