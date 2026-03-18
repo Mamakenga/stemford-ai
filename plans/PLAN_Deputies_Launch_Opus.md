@@ -843,14 +843,35 @@ PROMPT_FILE="$1"
 codex --model gpt-5.4 "$(cat "$PROMPT_FILE")"
 ```
 
+`/opt/stemford/run/cicd/run_commit.sh`
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+PROMPT_FILE="$1"
+cd /opt/stemford/app/control-api
+
+git add -A
+if git diff --cached --quiet; then
+  echo "[STOP] Executor produced no file changes. Commit skipped."
+  exit 3
+fi
+
+SUBJECT="$(head -n 1 "$PROMPT_FILE" | tr -d '\r' | cut -c1-72)"
+if [ -z "$SUBJECT" ]; then
+  SUBJECT="cycle update"
+fi
+git commit -m "executor: $SUBJECT"
+```
+
 `/opt/stemford/run/cicd/run_reviewer.sh`
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
+cd /opt/stemford/app/control-api
 claude -p "Review current changes. First line strictly: Verdict: P1=<n>, P2=<n>. Then findings." \
   --model opus \
   --output-format text \
-  --allowedTools "Read,Bash(git diff)"
+  --allowedTools "Read,Bash(git show --stat --patch --max-count=1)"
 ```
 
 `/opt/stemford/run/cicd/run_deployer.sh`
@@ -878,7 +899,8 @@ mkdir -p "$LOG_DIR"
 
 cd /opt/stemford
 
-/opt/stemford/run/cicd/run_executor.sh "$PROMPT_FILE" | tee "$LOG_DIR/executor.log"
+/usr/bin/script -qefc "/opt/stemford/run/cicd/run_executor.sh \"$PROMPT_FILE\"" "$LOG_DIR/executor.log"
+/opt/stemford/run/cicd/run_commit.sh "$PROMPT_FILE" | tee "$LOG_DIR/commit.log"
 /opt/stemford/run/cicd/run_reviewer.sh | tee "$LOG_DIR/reviewer.log"
 
 if ! grep -Eq "Verdict:[[:space:]]*P1=0" "$LOG_DIR/reviewer.log"; then
@@ -894,6 +916,7 @@ echo "[OK] Cycle completed. Logs: $LOG_DIR"
 Выдать права:
 ```bash
 chmod +x /opt/stemford/run/cicd/run_executor.sh
+chmod +x /opt/stemford/run/cicd/run_commit.sh
 chmod +x /opt/stemford/run/cicd/run_reviewer.sh
 chmod +x /opt/stemford/run/cicd/run_deployer.sh
 chmod +x /opt/stemford/run/cicd/cycle.sh
@@ -915,9 +938,10 @@ chmod +x /opt/stemford/run/cicd/cycle.sh
 #### 22.N.7 Критерии готовности (Definition of Ready)
 
 1. `cycle.sh` запускается одной командой без ручного переключения окон.
-2. При `P1>0` deploy гарантированно не выполняется.
-3. При `P1=0` smoke завершается с `PASS` и без `FAIL`.
-4. Логи трёх ролей лежат в одном каталоге `/opt/stemford/run/cicd-logs/<timestamp>/`.
+2. Между executor и reviewer есть обязательный git commit (если изменений нет — цикл останавливается).
+3. При `P1>0` deploy гарантированно не выполняется.
+4. При `P1=0` smoke завершается с `PASS` и без `FAIL`.
+5. Логи четырёх шагов (`executor`, `commit`, `reviewer`, `deployer`) лежат в одном каталоге `/opt/stemford/run/cicd-logs/<timestamp>/`.
 
 #### 22.N.8 Границы MVP этого пункта
 
