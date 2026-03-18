@@ -811,6 +811,120 @@ codex --model gpt-5.4 "implement task from HANDOFF_LOG"
 Разные API-ключи, разные `.env`, разные права файловой системы.
 Executor не имеет прав на production restart. Deployer не имеет прав на git push.
 
+### Пункт немедленной реализации (одна команда, без прыжков по окнам)
+
+Статус: **выполнить сейчас** (до перехода к режимам A/B/C).
+
+Цель: за 60–90 минут получить рабочий серверный цикл
+`executor -> reviewer -> deployer` с одним входом запуска.
+
+#### 22.N.1 Что должно получиться на выходе
+
+1. Один запуск из терминала запускает полный цикл.
+2. Если reviewer находит `P1>0` — deploy не выполняется.
+3. Если `P1=0` — выполняются `migrate -> restart -> smoke`.
+4. Все артефакты цикла складываются в один каталог логов.
+
+#### 22.N.2 Подготовка директорий на VPS
+
+```bash
+sudo mkdir -p /opt/stemford/run/cicd
+sudo mkdir -p /opt/stemford/run/cicd-logs
+sudo chown -R stemford:stemford /opt/stemford/run/cicd /opt/stemford/run/cicd-logs
+```
+
+#### 22.N.3 Скрипты ролей (тонкие обёртки)
+
+`/opt/stemford/run/cicd/run_executor.sh`
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+PROMPT_FILE="$1"
+codex --model gpt-5.4 "$(cat "$PROMPT_FILE")"
+```
+
+`/opt/stemford/run/cicd/run_reviewer.sh`
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+claude -p "Review current changes. First line strictly: Verdict: P1=<n>, P2=<n>. Then findings." \
+  --model opus \
+  --output-format text \
+  --allowedTools "Read,Bash(git diff)"
+```
+
+`/opt/stemford/run/cicd/run_deployer.sh`
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+cd /opt/stemford/app/control-api
+set -a; source /opt/stemford/run/.env; set +a
+npm run migrate
+systemctl restart stemford-control-api
+sleep 3
+bash ./scripts/smoke_scenarios.sh
+```
+
+#### 22.N.4 Единый оркестратор цикла
+
+`/opt/stemford/run/cicd/cycle.sh`
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+PROMPT_FILE="${1:-/opt/stemford/run/cicd/prompt.txt}"
+TS="$(date +%F_%H-%M-%S)"
+LOG_DIR="/opt/stemford/run/cicd-logs/$TS"
+mkdir -p "$LOG_DIR"
+
+cd /opt/stemford
+
+/opt/stemford/run/cicd/run_executor.sh "$PROMPT_FILE" | tee "$LOG_DIR/executor.log"
+/opt/stemford/run/cicd/run_reviewer.sh | tee "$LOG_DIR/reviewer.log"
+
+if ! grep -Eq "Verdict:[[:space:]]*P1=0" "$LOG_DIR/reviewer.log"; then
+  echo "[STOP] Reviewer verdict blocks deploy (P1>0)."
+  echo "Logs: $LOG_DIR"
+  exit 2
+fi
+
+/opt/stemford/run/cicd/run_deployer.sh | tee "$LOG_DIR/deployer.log"
+echo "[OK] Cycle completed. Logs: $LOG_DIR"
+```
+
+Выдать права:
+```bash
+chmod +x /opt/stemford/run/cicd/run_executor.sh
+chmod +x /opt/stemford/run/cicd/run_reviewer.sh
+chmod +x /opt/stemford/run/cicd/run_deployer.sh
+chmod +x /opt/stemford/run/cicd/cycle.sh
+```
+
+#### 22.N.5 Команда запуска
+
+```bash
+/opt/stemford/run/cicd/cycle.sh /opt/stemford/run/cicd/prompt.txt
+```
+
+#### 22.N.6 Формат prompt-файла
+
+`/opt/stemford/run/cicd/prompt.txt` должен содержать:
+1. scope одного изменения (минимальный);
+2. запрет на расширение scope;
+3. требование handoff summary (`Changes / Checks / Open risks`).
+
+#### 22.N.7 Критерии готовности (Definition of Ready)
+
+1. `cycle.sh` запускается одной командой без ручного переключения окон.
+2. При `P1>0` deploy гарантированно не выполняется.
+3. При `P1=0` smoke завершается с `PASS` и без `FAIL`.
+4. Логи трёх ролей лежат в одном каталоге `/opt/stemford/run/cicd-logs/<timestamp>/`.
+
+#### 22.N.8 Границы MVP этого пункта
+
+1. Это операционный MVP для одного сервера и одного репозитория Stemford.
+2. Systemd-юниты для `natalia-executor/reviewer/deployer` — следующий шаг после успешных 3–5 циклов.
+3. Auto-rollback и webhook-триггеры в этот пункт не входят (делаются отдельно).
+
 ### Поэтапный запуск CI/CD
 
 | Режим | Что работает | Человек делает |
