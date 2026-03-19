@@ -15,3 +15,5 @@ Thumbs.db
 
 # Local AI tool settings
 .claude/
+run/
+jarvis-ref/
