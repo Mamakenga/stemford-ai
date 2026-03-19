@@ -9,6 +9,14 @@ const MAX_RETRY_ATTEMPTS = (() => {
   const raw = Number(process.env.TASK_MAX_RETRY_ATTEMPTS || 5);
   return Number.isInteger(raw) && raw > 0 ? raw : 5;
 })();
+const MAX_RUN_ATTEMPTS = (() => {
+  const raw = Number(process.env.RUNTIME_MAX_RUN_ATTEMPTS || 3);
+  return Number.isInteger(raw) && raw > 0 ? raw : 3;
+})();
+const DEFAULT_RUN_TIMEOUT_SEC = (() => {
+  const raw = Number(process.env.RUNTIME_DEFAULT_TIMEOUT_SEC || 300);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 300;
+})();
 const CONTROL_API_ENFORCE_TOOL_ACCESS = String(process.env.CONTROL_API_ENFORCE_TOOL_ACCESS || "1") !== "0";
 const CONTROL_API_ENABLE_HARD_CRITIC = String(process.env.CONTROL_API_ENABLE_HARD_CRITIC || "1") !== "0";
 const CONTROL_API_TELEGRAM_WEBHOOK_ENABLED = String(process.env.CONTROL_API_TELEGRAM_WEBHOOK_ENABLED || "1") !== "0";
@@ -46,7 +54,7 @@ const TELEGRAM_NOTIFY_CHAT_IDS = parseChatIds(
   process.env.ALLOWED_CHAT_IDS ||
   ""
 );
-const CRITICAL_TELEGRAM_ACTIONS = new Set(["task_failed", "retry_limit_exceeded", "approval_requested"]);
+const CRITICAL_TELEGRAM_ACTIONS = new Set(["task_failed", "retry_limit_exceeded", "approval_requested", "run_dead_letter"]);
 
 const app = express();
 app.use(express.json());
@@ -140,6 +148,18 @@ function toHumanFeedText(row) {
       return `[${hhmm}] ${actor} -> одобрение отклонено ${payload.approval_id || row.entity_id}`;
     case "tool_access_denied":
       return `[${hhmm}] ${actor} -> доступ запрещён ${payload.action_key || target}`;
+    case "run_accepted":
+      return `[${hhmm}] ${actor} -> принят trigger ${payload.trigger_id || target} → run ${row.entity_id}`;
+    case "run_started":
+      return `[${hhmm}] ${actor} -> запущен run ${row.entity_id}`;
+    case "run_completed":
+      return `[${hhmm}] ${actor} -> завершён run ${row.entity_id} (${payload.status || "?"})`;
+    case "run_retry":
+      return `[${hhmm}] ${actor} -> retry run ${row.entity_id} (attempt ${payload.attempt_number || "?"})`;
+    case "run_dead_letter":
+      return `[${hhmm}] ${actor} -> DEAD LETTER run ${row.entity_id} после ${payload.attempt_number || "?"} попыток`;
+    case "trigger_duplicate_skipped":
+      return `[${hhmm}] ${actor} -> дубль trigger ${payload.trigger_id || target} пропущен`;
     default:
       return `[${hhmm}] ${actor} -> ${row.action_type} ${target}`;
   }
@@ -619,6 +639,9 @@ const ROLE_ACTION_WHITELIST = {
     "approvals.request.external_comm",
     "approvals.request.financial_change",
     "approvals.request.policy_change",
+    "runtime.accept",
+    "runtime.retry",
+    "runtime.read",
   ]),
   strategy: new Set([
     "tasks.write",
@@ -629,6 +652,7 @@ const ROLE_ACTION_WHITELIST = {
     "approvals.request.safe_read",
     "approvals.request.internal_write",
     "approvals.request.external_comm",
+    "runtime.read",
   ]),
   finance: new Set([
     "tasks.write",
@@ -639,6 +663,7 @@ const ROLE_ACTION_WHITELIST = {
     "approvals.request.safe_read",
     "approvals.request.internal_write",
     "approvals.request.financial_change",
+    "runtime.read",
   ]),
   pmo: new Set([
     "tasks.write",
@@ -647,9 +672,13 @@ const ROLE_ACTION_WHITELIST = {
     "memory.write",
     "approvals.request.safe_read",
     "approvals.request.internal_write",
+    "runtime.read",
   ]),
   system_watchdog: new Set([
     "memory.write",
+    "runtime.accept",
+    "runtime.retry",
+    "runtime.read",
   ]),
 };
 
@@ -721,6 +750,12 @@ function buildCriticalTelegramMessage({ actionType, entityType, entityId, actorR
     const limit = payload && payload.max_retry_attempts != null ? String(payload.max_retry_attempts) : "?";
     const reason = payload && payload.reason ? String(payload.reason) : "no reason";
     return `${base}\nattempt: ${attempt}/${limit}\nreason: ${reason}`;
+  }
+  if (actionType === "run_dead_letter") {
+    const attempt = payload && payload.attempt_number != null ? String(payload.attempt_number) : "?";
+    const maxAttempts = payload && payload.max_attempts != null ? String(payload.max_attempts) : "?";
+    const role = payload && payload.role ? String(payload.role) : "unknown";
+    return `${base}\nrole: ${role}\nattempt: ${attempt}/${maxAttempts}\n⚠️ Требуется ручное вмешательство`;
   }
   if (actionType === "approval_requested") {
     const approvalId = payload && payload.approval_id ? String(payload.approval_id) : "unknown";
@@ -1398,6 +1433,369 @@ app.post("/tasks/:id/retry", async (req, res) => {
     return ok(res, row);
   } catch (e) {
     return fail(res, 500, "task_retry_failed", e.message);
+  }
+});
+
+/* ===== H-27: Runtime core — acceptTrigger + retryRun ===== */
+
+// POST /runtime/trigger — acceptTrigger(triggerId, payload)
+// Dedup via processed_triggers. Duplicate trigger_id → skip.
+app.post("/runtime/trigger", async (req, res) => {
+  const trigger_id = String(req.body?.trigger_id || "").trim();
+  const role = String(req.body?.role || "").trim();
+  const actor_role = String(req.body?.actor_role || "orchestrator").trim();
+  const correlation_id = req.body?.correlation_id ? String(req.body.correlation_id).trim() : null;
+  const payload = req.body?.payload || {};
+  const max_run_timeout_sec = req.body?.max_run_timeout_sec
+    ? parsePositiveInt(req.body.max_run_timeout_sec, DEFAULT_RUN_TIMEOUT_SEC, 3600)
+    : DEFAULT_RUN_TIMEOUT_SEC;
+
+  if (!trigger_id || !role) {
+    return fail(res, 400, "validation_error", "trigger_id and role are required");
+  }
+  {
+    const allowed = await requireToolAccess(
+      res,
+      actor_role,
+      "runtime.accept",
+      { entity_type: "agent_run", entity_id: trigger_id }
+    );
+    if (!allowed) return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Dedup check: try to insert into processed_triggers
+    const dedupResult = await client.query(
+      `INSERT INTO processed_triggers (trigger_id)
+       VALUES ($1)
+       ON CONFLICT (trigger_id) DO NOTHING
+       RETURNING trigger_id`,
+      [trigger_id]
+    );
+
+    if (dedupResult.rowCount === 0) {
+      // Duplicate — skip
+      await client.query("COMMIT");
+      await writeAction("trigger_duplicate_skipped", "agent_run", trigger_id, actor_role, {
+        trigger_id,
+        role,
+      });
+      return ok(res, {
+        accepted: false,
+        reason: "duplicate_trigger",
+        trigger_id,
+      });
+    }
+
+    // Create agent_run
+    const runId = id("run");
+    const corrId = correlation_id || id("cor");
+
+    await client.query(
+      `INSERT INTO agent_runs
+       (id, trigger_id, role, status, attempt_number, retry_of_run_id,
+        correlation_id, payload, max_run_timeout_sec)
+       VALUES ($1, $2, $3, 'pending', 1, NULL, $4, $5::jsonb, $6)`,
+      [runId, trigger_id, role, corrId, JSON.stringify(payload), max_run_timeout_sec]
+    );
+
+    await client.query("COMMIT");
+
+    await writeAction("run_accepted", "agent_run", runId, actor_role, {
+      trigger_id,
+      role,
+      correlation_id: corrId,
+      attempt_number: 1,
+    });
+
+    return ok(res, {
+      accepted: true,
+      run_id: runId,
+      trigger_id,
+      role,
+      status: "pending",
+      attempt_number: 1,
+      correlation_id: corrId,
+    });
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    return fail(res, 500, "runtime_trigger_failed", e.message);
+  } finally {
+    client.release();
+  }
+});
+
+// POST /runtime/runs/:id/retry — retryRun(failedRunId)
+// Bypasses dedup. Creates new agent_run with retry_of_run_id.
+// Max MAX_RUN_ATTEMPTS attempts, then dead_letter.
+app.post("/runtime/runs/:id/retry", async (req, res) => {
+  const failedRunId = req.params.id;
+  const actor_role = String(req.body?.actor_role || "orchestrator").trim();
+  const reason = req.body?.reason ? String(req.body.reason).trim() : null;
+
+  {
+    const allowed = await requireToolAccess(
+      res,
+      actor_role,
+      "runtime.retry",
+      { entity_type: "agent_run", entity_id: failedRunId }
+    );
+    if (!allowed) return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Lock the failed run for update
+    const currentQ = await client.query(
+      `SELECT id, trigger_id, role, status, attempt_number, correlation_id,
+              payload, max_run_timeout_sec
+       FROM agent_runs
+       WHERE id = $1
+       FOR UPDATE`,
+      [failedRunId]
+    );
+
+    if (currentQ.rowCount === 0) {
+      await client.query("COMMIT");
+      return fail(res, 404, "not_found", "agent_run not found");
+    }
+
+    const failedRun = currentQ.rows[0];
+
+    // Only error/timeout runs can be retried
+    if (!["error", "timeout"].includes(failedRun.status)) {
+      await client.query("COMMIT");
+      return fail(res, 409, "invalid_status", `cannot retry run with status '${failedRun.status}', expected error or timeout`);
+    }
+
+    const nextAttempt = failedRun.attempt_number + 1;
+
+    // Check max attempts
+    if (nextAttempt > MAX_RUN_ATTEMPTS) {
+      // Promote to dead_letter
+      await client.query(
+        `UPDATE agent_runs SET status = 'dead_letter', finished_at = now()
+         WHERE id = $1`,
+        [failedRunId]
+      );
+      await client.query("COMMIT");
+
+      await writeAction("run_dead_letter", "agent_run", failedRunId, actor_role, {
+        trigger_id: failedRun.trigger_id,
+        role: failedRun.role,
+        attempt_number: failedRun.attempt_number,
+        max_attempts: MAX_RUN_ATTEMPTS,
+        reason: reason || "max attempts exceeded",
+      });
+
+      return ok(res, {
+        retried: false,
+        reason: "dead_letter",
+        run_id: failedRunId,
+        attempt_number: failedRun.attempt_number,
+        max_attempts: MAX_RUN_ATTEMPTS,
+      });
+    }
+
+    // Create retry run — bypasses processed_triggers (same trigger_id, new run)
+    const newRunId = id("run");
+
+    await client.query(
+      `INSERT INTO agent_runs
+       (id, trigger_id, role, status, attempt_number, retry_of_run_id,
+        correlation_id, payload, max_run_timeout_sec)
+       VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7::jsonb, $8)`,
+      [
+        newRunId,
+        failedRun.trigger_id,
+        failedRun.role,
+        nextAttempt,
+        failedRunId,
+        failedRun.correlation_id,
+        JSON.stringify(failedRun.payload || {}),
+        failedRun.max_run_timeout_sec,
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    await writeAction("run_retry", "agent_run", newRunId, actor_role, {
+      retry_of_run_id: failedRunId,
+      trigger_id: failedRun.trigger_id,
+      role: failedRun.role,
+      attempt_number: nextAttempt,
+      reason: reason || null,
+    });
+
+    return ok(res, {
+      retried: true,
+      run_id: newRunId,
+      retry_of_run_id: failedRunId,
+      trigger_id: failedRun.trigger_id,
+      role: failedRun.role,
+      status: "pending",
+      attempt_number: nextAttempt,
+      correlation_id: failedRun.correlation_id,
+    });
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    return fail(res, 500, "runtime_retry_failed", e.message);
+  } finally {
+    client.release();
+  }
+});
+
+// POST /runtime/runs/:id/start — mark run as running
+app.post("/runtime/runs/:id/start", async (req, res) => {
+  const runId = req.params.id;
+  const actor_role = String(req.body?.actor_role || "orchestrator").trim();
+  {
+    const allowed = await requireToolAccess(
+      res,
+      actor_role,
+      "runtime.accept",
+      { entity_type: "agent_run", entity_id: runId }
+    );
+    if (!allowed) return;
+  }
+
+  try {
+    const q = await pool.query(
+      `UPDATE agent_runs
+       SET status = 'running', started_at = now()
+       WHERE id = $1 AND status = 'pending'
+       RETURNING id, trigger_id, role, status, attempt_number, correlation_id, started_at`,
+      [runId]
+    );
+    if (q.rowCount === 0) {
+      return fail(res, 409, "invalid_status", "run is not in pending status");
+    }
+    const row = q.rows[0];
+    await writeAction("run_started", "agent_run", row.id, actor_role, {
+      role: row.role,
+      correlation_id: row.correlation_id,
+    });
+    return ok(res, row);
+  } catch (e) {
+    return fail(res, 500, "runtime_start_failed", e.message);
+  }
+});
+
+// POST /runtime/runs/:id/complete — mark run as success/error/timeout
+app.post("/runtime/runs/:id/complete", async (req, res) => {
+  const runId = req.params.id;
+  const actor_role = String(req.body?.actor_role || "orchestrator").trim();
+  const status = String(req.body?.status || "").trim();
+  const result = req.body?.result || null;
+  const error_message = req.body?.error_message ? String(req.body.error_message).trim() : null;
+  const token_usage = req.body?.token_usage || null;
+
+  if (!["success", "error", "timeout"].includes(status)) {
+    return fail(res, 400, "validation_error", "status must be success, error, or timeout");
+  }
+  {
+    const allowed = await requireToolAccess(
+      res,
+      actor_role,
+      "runtime.accept",
+      { entity_type: "agent_run", entity_id: runId }
+    );
+    if (!allowed) return;
+  }
+
+  try {
+    const q = await pool.query(
+      `UPDATE agent_runs
+       SET status = $2,
+           result = $3::jsonb,
+           error_message = $4,
+           token_usage = $5::jsonb,
+           finished_at = now()
+       WHERE id = $1 AND status = 'running'
+       RETURNING id, trigger_id, role, status, attempt_number, correlation_id,
+                 error_message, started_at, finished_at`,
+      [
+        runId,
+        status,
+        result ? JSON.stringify(result) : null,
+        error_message,
+        token_usage ? JSON.stringify(token_usage) : null,
+      ]
+    );
+
+    if (q.rowCount === 0) {
+      return fail(res, 409, "invalid_status", "run is not in running status");
+    }
+
+    const row = q.rows[0];
+    await writeAction("run_completed", "agent_run", row.id, actor_role, {
+      status: row.status,
+      role: row.role,
+      correlation_id: row.correlation_id,
+      error_message: row.error_message || null,
+    });
+
+    return ok(res, row);
+  } catch (e) {
+    return fail(res, 500, "runtime_complete_failed", e.message);
+  }
+});
+
+// GET /runtime/runs — list runs with optional filters
+app.get("/runtime/runs", async (req, res) => {
+  const actor_role = String(req.query.actor_role || "orchestrator").trim();
+  {
+    const allowed = await requireToolAccess(
+      res,
+      actor_role,
+      "runtime.read",
+      { entity_type: "agent_run", entity_id: "query" }
+    );
+    if (!allowed) return;
+  }
+
+  const limit = parsePositiveInt(req.query.limit, 20, 100);
+  const where = [];
+  const vals = [];
+
+  if (req.query.role) {
+    vals.push(String(req.query.role).trim());
+    where.push(`role = $${vals.length}`);
+  }
+  if (req.query.status) {
+    vals.push(String(req.query.status).trim());
+    where.push(`status = $${vals.length}`);
+  }
+  if (req.query.trigger_id) {
+    vals.push(String(req.query.trigger_id).trim());
+    where.push(`trigger_id = $${vals.length}`);
+  }
+  if (req.query.correlation_id) {
+    vals.push(String(req.query.correlation_id).trim());
+    where.push(`correlation_id = $${vals.length}`);
+  }
+
+  vals.push(limit);
+
+  try {
+    const q = await pool.query(
+      `SELECT id, trigger_id, role, status, attempt_number, retry_of_run_id,
+              correlation_id, error_message, max_run_timeout_sec,
+              started_at, finished_at, created_at
+       FROM agent_runs
+       ${where.length ? "WHERE " + where.join(" AND ") : ""}
+       ORDER BY created_at DESC
+       LIMIT $${vals.length}`,
+      vals
+    );
+    return ok(res, { count: q.rowCount, runs: q.rows });
+  } catch (e) {
+    return fail(res, 500, "runtime_runs_query_failed", e.message);
   }
 });
 

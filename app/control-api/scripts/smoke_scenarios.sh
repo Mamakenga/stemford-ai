@@ -28,6 +28,8 @@ declare -a SMOKE_TASK_IDS=()
 declare -a SMOKE_ENTITY_IDS=()
 declare -a SMOKE_MEMORY_CARD_IDS=()
 declare -a SMOKE_MEMORY_USER_IDS=()
+declare -a SMOKE_TRIGGER_IDS=()
+declare -a SMOKE_RUN_IDS=()
 
 log_pass() { PASS=$((PASS + 1)); echo "PASS: $1"; }
 log_fail() { FAIL=$((FAIL + 1)); echo "FAIL: $1"; }
@@ -68,6 +70,23 @@ cleanup_smoke_entities() {
     mem_user_sql="$(sql_literal "$mem_user")"
     psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
       delete from memory_cards where user_id = ${mem_user_sql};
+    " >/dev/null 2>&1 || true
+  done
+
+  for run_id in "${SMOKE_RUN_IDS[@]}"; do
+    local run_id_sql="$(sql_literal "$run_id")"
+    psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
+      delete from actions_log where entity_type = 'agent_run' and entity_id = ${run_id_sql};
+      delete from agent_runs where id = ${run_id_sql} or retry_of_run_id = ${run_id_sql};
+    " >/dev/null 2>&1 || true
+  done
+
+  for trig_id in "${SMOKE_TRIGGER_IDS[@]}"; do
+    local trig_id_sql="$(sql_literal "$trig_id")"
+    psql "$DB_URL" -v ON_ERROR_STOP=1 -c "
+      delete from agent_runs where trigger_id = ${trig_id_sql};
+      delete from actions_log where entity_type = 'agent_run' and payload::text like '%${trig_id}%';
+      delete from processed_triggers where trigger_id = ${trig_id_sql};
     " >/dev/null 2>&1 || true
   done
 }
