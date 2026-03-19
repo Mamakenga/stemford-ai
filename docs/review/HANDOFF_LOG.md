@@ -778,3 +778,12 @@ Review ask:
 Verdict: pending
 P1 items: pending
 P2 items: pending
+
+### H-2026-03-19-OPS-01 (runtime cicd micro-fix)
+- Scope: fix operational edge case in VPS runbook scripts.
+- Change: `run_with_rotation.sh` now ensures log directory exists via `mkdir -p "$LOG_DIR"` before writing `rotation.log`.
+- Why: manual reviewer run failed when target log folder did not exist.
+- Checks:
+  - `grep -n 'LOG_DIR\|mkdir -p "$LOG_DIR"' /opt/stemford/run/cicd/run_with_rotation.sh` shows guard in place.
+  - `bash -n /opt/stemford/run/cicd/run_with_rotation.sh` → OK.
+- Verdict: P1=0, P2=0.

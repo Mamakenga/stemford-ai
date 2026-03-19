@@ -213,3 +213,12 @@ Steps:
 - [x] smoke summary: `PASS=9 FAIL=0 SKIP=0`
 - [x] S9 passed: `/critic/check` deny path (`critic_reason_required`) + allow path (`tasks.write`)
 Result: OK
+
+### D-2026-03-19-OPS-01
+- Handoff: H-2026-03-19-OPS-01
+- Type: operational hotfix (VPS script only, not in repo code path).
+- Applied on VPS: `/opt/stemford/run/cicd/run_with_rotation.sh`.
+- Validation:
+  - syntax check passed.
+  - previous full smoke baseline remains green: PASS=12 FAIL=0 SKIP=0.
+- Result: OK.
