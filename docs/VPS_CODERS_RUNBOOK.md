@@ -368,11 +368,11 @@ is_rate_limited() {
 is_hard_error() {
   local output="$1"
   local exit_code="$2"
-  # Non-zero exit + no meaningful output = hard error (crash, bad key, bad model)
-  if [ "$exit_code" -ne 0 ] && [ "${#output}" -lt 20 ]; then
+  # Any non-zero exit that isn't rate-limited = hard error, go to next model
+  if [ "$exit_code" -ne 0 ]; then
     return 0
   fi
-  # Explicit API errors
+  # Zero exit but explicit API error in output
   echo "$output" | grep -qiE "(invalid.api.key|model.not.found|unauthorized|forbidden|ENOENT|command.not.found|ERROR:.empty)"
 }
 
