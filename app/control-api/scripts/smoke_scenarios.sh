@@ -324,6 +324,140 @@ scenario_9_critic_check_contract() {
   fi
 }
 
+scenario_10_runtime_dedup() {
+  local now trigger_id resp1 resp2 run_id
+  now="$(date +%s)"
+  trigger_id="smoke_trigger_${now}"
+  SMOKE_TRIGGER_IDS+=("$trigger_id")
+
+  # First trigger → should be accepted
+  resp1="$(curl -sS -X POST "$API_BASE/runtime/trigger" \
+    -H "Content-Type: application/json" \
+    -d "{\"trigger_id\":\"${trigger_id}\",\"role\":\"strategy\",\"actor_role\":\"orchestrator\",\"payload\":{\"test\":true}}")"
+
+  if ! echo "$resp1" | jq -e '.ok == true and .data.accepted == true' >/dev/null; then
+    log_fail "S10 runtime dedup: first trigger not accepted"
+    return
+  fi
+
+  run_id="$(echo "$resp1" | jq -r '.data.run_id')"
+  SMOKE_RUN_IDS+=("$run_id")
+
+  # Second trigger with same ID → should be skipped (duplicate)
+  resp2="$(curl -sS -X POST "$API_BASE/runtime/trigger" \
+    -H "Content-Type: application/json" \
+    -d "{\"trigger_id\":\"${trigger_id}\",\"role\":\"strategy\",\"actor_role\":\"orchestrator\"}")"
+
+  if echo "$resp2" | jq -e '.ok == true and .data.accepted == false and .data.reason == "duplicate_trigger"' >/dev/null; then
+    log_pass "S10 runtime dedup: duplicate trigger skipped"
+  else
+    log_fail "S10 runtime dedup: expected duplicate_trigger"
+  fi
+}
+
+scenario_11_runtime_retry() {
+  local now trigger_id resp run_id start_resp complete_resp retry_resp retry_run_id
+  now="$(date +%s)"
+  trigger_id="smoke_retry_trigger_${now}"
+  SMOKE_TRIGGER_IDS+=("$trigger_id")
+
+  # Create run
+  resp="$(curl -sS -X POST "$API_BASE/runtime/trigger" \
+    -H "Content-Type: application/json" \
+    -d "{\"trigger_id\":\"${trigger_id}\",\"role\":\"strategy\",\"actor_role\":\"orchestrator\"}")"
+  run_id="$(echo "$resp" | jq -r '.data.run_id')"
+  SMOKE_RUN_IDS+=("$run_id")
+
+  # Start it
+  start_resp="$(curl -sS -X POST "$API_BASE/runtime/runs/${run_id}/start" \
+    -H "Content-Type: application/json" \
+    -d '{"actor_role":"orchestrator"}')"
+  if ! echo "$start_resp" | jq -e '.ok == true and .data.status == "running"' >/dev/null; then
+    log_fail "S11 runtime retry: start failed"
+    return
+  fi
+
+  # Complete with error
+  complete_resp="$(curl -sS -X POST "$API_BASE/runtime/runs/${run_id}/complete" \
+    -H "Content-Type: application/json" \
+    -d '{"actor_role":"orchestrator","status":"error","error_message":"smoke test error"}')"
+  if ! echo "$complete_resp" | jq -e '.ok == true and .data.status == "error"' >/dev/null; then
+    log_fail "S11 runtime retry: complete-as-error failed"
+    return
+  fi
+
+  # Retry → should create new attempt
+  retry_resp="$(curl -sS -X POST "$API_BASE/runtime/runs/${run_id}/retry" \
+    -H "Content-Type: application/json" \
+    -d '{"actor_role":"orchestrator","reason":"smoke retry test"}')"
+  if ! echo "$retry_resp" | jq -e '.ok == true and .data.retried == true and .data.attempt_number == 2' >/dev/null; then
+    log_fail "S11 runtime retry: expected retried=true, attempt=2"
+    return
+  fi
+
+  retry_run_id="$(echo "$retry_resp" | jq -r '.data.run_id')"
+  SMOKE_RUN_IDS+=("$retry_run_id")
+
+  # Retry same run again → should be rejected (already has child)
+  local dup_retry_resp
+  dup_retry_resp="$(curl -sS -X POST "$API_BASE/runtime/runs/${run_id}/retry" \
+    -H "Content-Type: application/json" \
+    -d '{"actor_role":"orchestrator","reason":"duplicate retry"}')"
+  if echo "$dup_retry_resp" | jq -e '.ok == false and .error.code == "already_retried"' >/dev/null; then
+    log_pass "S11 runtime retry: new attempt created + duplicate retry blocked"
+  else
+    log_fail "S11 runtime retry: duplicate retry should be blocked"
+  fi
+}
+
+scenario_12_runtime_dead_letter() {
+  local now trigger_id resp run_id i start_resp complete_resp retry_resp dead_resp
+  now="$(date +%s)"
+  trigger_id="smoke_dl_trigger_${now}"
+  SMOKE_TRIGGER_IDS+=("$trigger_id")
+
+  # Create run (attempt 1)
+  resp="$(curl -sS -X POST "$API_BASE/runtime/trigger" \
+    -H "Content-Type: application/json" \
+    -d "{\"trigger_id\":\"${trigger_id}\",\"role\":\"strategy\",\"actor_role\":\"orchestrator\"}")"
+  run_id="$(echo "$resp" | jq -r '.data.run_id')"
+  SMOKE_RUN_IDS+=("$run_id")
+
+  # Fail attempts 1, 2, 3 → then retry should → dead_letter
+  local current_run_id="$run_id"
+  for i in 1 2 3; do
+    # Start
+    curl -sS -X POST "$API_BASE/runtime/runs/${current_run_id}/start" \
+      -H "Content-Type: application/json" \
+      -d '{"actor_role":"orchestrator"}' >/dev/null
+
+    # Complete with error
+    curl -sS -X POST "$API_BASE/runtime/runs/${current_run_id}/complete" \
+      -H "Content-Type: application/json" \
+      -d "{\"actor_role\":\"orchestrator\",\"status\":\"error\",\"error_message\":\"fail attempt $i\"}" >/dev/null
+
+    if [ "$i" -lt 3 ]; then
+      # Retry
+      retry_resp="$(curl -sS -X POST "$API_BASE/runtime/runs/${current_run_id}/retry" \
+        -H "Content-Type: application/json" \
+        -d '{"actor_role":"orchestrator","reason":"smoke dead letter test"}')"
+      current_run_id="$(echo "$retry_resp" | jq -r '.data.run_id')"
+      SMOKE_RUN_IDS+=("$current_run_id")
+    fi
+  done
+
+  # Attempt 4 retry → should trigger dead_letter
+  dead_resp="$(curl -sS -X POST "$API_BASE/runtime/runs/${current_run_id}/retry" \
+    -H "Content-Type: application/json" \
+    -d '{"actor_role":"orchestrator","reason":"should be dead letter"}')"
+
+  if echo "$dead_resp" | jq -e '.ok == true and .data.retried == false and .data.reason == "dead_letter"' >/dev/null; then
+    log_pass "S12 runtime dead letter: dead_letter after 3 attempts"
+  else
+    log_fail "S12 runtime dead letter: expected dead_letter after max attempts"
+  fi
+}
+
 echo "Running smoke scenarios against $API_BASE"
 echo "---"
 
@@ -336,6 +470,9 @@ scenario_6_pmo_forbidden_finance_command
 scenario_7_memory_cards
 scenario_8_critic_class_a_reason_required
 scenario_9_critic_check_contract
+scenario_10_runtime_dedup
+scenario_11_runtime_retry
+scenario_12_runtime_dead_letter
 
 echo "---"
 echo "Summary: PASS=$PASS FAIL=$FAIL SKIP=$SKIP"

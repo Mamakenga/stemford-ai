@@ -1573,7 +1573,23 @@ app.post("/runtime/runs/:id/retry", async (req, res) => {
       return fail(res, 409, "invalid_status", `cannot retry run with status '${failedRun.status}', expected error or timeout`);
     }
 
-    const nextAttempt = failedRun.attempt_number + 1;
+    // Guard: reject retry if this run already has a child (prevent duplicate retries)
+    const childCheck = await client.query(
+      `SELECT id FROM agent_runs WHERE retry_of_run_id = $1 LIMIT 1`,
+      [failedRunId]
+    );
+    if (childCheck.rowCount > 0) {
+      await client.query("COMMIT");
+      return fail(res, 409, "already_retried", `run ${failedRunId} already has a retry child: ${childCheck.rows[0].id}`);
+    }
+
+    // Use max attempt_number across the whole trigger chain (not just this run)
+    const maxAttemptQ = await client.query(
+      `SELECT COALESCE(MAX(attempt_number), 0) AS max_attempt
+       FROM agent_runs WHERE trigger_id = $1`,
+      [failedRun.trigger_id]
+    );
+    const nextAttempt = (maxAttemptQ.rows[0]?.max_attempt || failedRun.attempt_number) + 1;
 
     // Check max attempts
     if (nextAttempt > MAX_RUN_ATTEMPTS) {

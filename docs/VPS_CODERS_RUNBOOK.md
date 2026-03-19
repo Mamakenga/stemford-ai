@@ -306,10 +306,36 @@ LOG_DIR="${3:-/tmp}"
 
 source /opt/stemford/run/.env
 
+# Provider mapping (tool -> provider)
+declare -A TOOL_PROVIDER=(
+  [codex]="openai" [claude]="anthropic" [claude_opus]="anthropic"
+  [gemini]="google" [kimi]="moonshot" [devstral]="mistral"
+  [minimax_free]="minimax" [qwen_or]="qwen"
+)
+
 # Порядок ротации для executor
 EXECUTOR_CHAIN=("codex" "claude" "gemini" "kimi" "devstral" "minimax_free" "qwen_or")
-# Порядок ротации для reviewer (никогда не совпадает с текущим executor провайдером)
-REVIEWER_CHAIN=("claude_opus" "kimi" "devstral" "gemini")
+# Full reviewer chain (will be filtered by provider exclusion)
+REVIEWER_CHAIN_FULL=("claude_opus" "kimi" "devstral" "gemini")
+
+# Build reviewer chain excluding current executor's provider
+EXECUTOR_USED=""
+if [ -f "$LOG_DIR/rotation.log" ]; then
+  EXECUTOR_USED="$(grep 'succeeded' "$LOG_DIR/rotation.log" 2>/dev/null | tail -1 | sed 's/.*Trying: //;s/ .*//')"
+fi
+EXCLUDED_PROVIDER="${TOOL_PROVIDER[$EXECUTOR_USED]:-}"
+
+REVIEWER_CHAIN=()
+for t in "${REVIEWER_CHAIN_FULL[@]}"; do
+  if [ -n "$EXCLUDED_PROVIDER" ] && [ "${TOOL_PROVIDER[$t]}" = "$EXCLUDED_PROVIDER" ]; then
+    continue
+  fi
+  REVIEWER_CHAIN+=("$t")
+done
+# Fallback: if filtering removed everything, use full chain
+if [ ${#REVIEWER_CHAIN[@]} -eq 0 ]; then
+  REVIEWER_CHAIN=("${REVIEWER_CHAIN_FULL[@]}")
+fi
 
 run_codex()        { codex --model gpt-5.4 "$(cat "$PROMPT")" 2>&1; }
 run_claude()       { claude -p "$(cat "$PROMPT")" --model sonnet --output-format text 2>&1; }
@@ -339,12 +365,29 @@ is_rate_limited() {
   echo "$output" | grep -qiE "(rate.limit|429|quota.exceeded|limit.reached|capacity|too.many.requests)"
 }
 
+is_hard_error() {
+  local output="$1"
+  local exit_code="$2"
+  # Non-zero exit + no meaningful output = hard error (crash, bad key, bad model)
+  if [ "$exit_code" -ne 0 ] && [ "${#output}" -lt 20 ]; then
+    return 0
+  fi
+  # Explicit API errors
+  echo "$output" | grep -qiE "(invalid.api.key|model.not.found|unauthorized|forbidden|ENOENT|command.not.found|ERROR:.empty)"
+}
+
+is_valid_reviewer_output() {
+  local output="$1"
+  echo "$output" | grep -qiE "Verdict:[[:space:]]*P[12]="
+}
+
 CHAIN_VAR="${ROLE^^}_CHAIN[@]"
 CHAIN=("${!CHAIN_VAR}")
 
 for tool in "${CHAIN[@]}"; do
   echo "[ROTATION] Trying: $tool" >> "$LOG_DIR/rotation.log"
-  output=$(run_$tool 2>&1) || true
+  exit_code=0
+  output=$(run_$tool 2>&1) || exit_code=$?
 
   if is_rate_limited "$output"; then
     echo "[ROTATION] $tool hit rate limit, switching..." >> "$LOG_DIR/rotation.log"
@@ -352,7 +395,20 @@ for tool in "${CHAIN[@]}"; do
     continue
   fi
 
-  echo "[ROTATION] $tool succeeded" >> "$LOG_DIR/rotation.log"
+  if is_hard_error "$output" "$exit_code"; then
+    echo "[ROTATION] $tool hard error (exit=$exit_code), switching..." >> "$LOG_DIR/rotation.log"
+    echo "[ROTATION] $tool -> hard error" >&2
+    continue
+  fi
+
+  # For reviewer: validate that output contains Verdict line
+  if [ "$ROLE" = "reviewer" ] && ! is_valid_reviewer_output "$output"; then
+    echo "[ROTATION] $tool reviewer output missing Verdict, switching..." >> "$LOG_DIR/rotation.log"
+    echo "[ROTATION] $tool -> invalid reviewer output" >&2
+    continue
+  fi
+
+  echo "[ROTATION] $tool succeeded (exit=$exit_code)" >> "$LOG_DIR/rotation.log"
   echo "$output"
   exit 0
 done
