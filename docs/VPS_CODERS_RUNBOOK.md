@@ -571,7 +571,7 @@ chmod +x /opt/stemford/run/cicd/cycle.sh
 4. При `P1=0` smoke завершается с `PASS` и без `FAIL`.
 5. Логи пяти шагов (`executor`, `commit`, `reviewer`, `deployer`, `rotation`) лежат в одном каталоге.
 6. При исчерпании лимита executor автоматически переключается на следующую модель без ручного вмешательства.
-7. OpenRouter smoke-тест проходит минимум для 2 моделей.
+7. OpenRouter smoke подтвержден для `qwen/qwen3-coder-next`, `moonshotai/kimi-k2.5` и `mistralai/devstral-2512`.
 
 ---
 
