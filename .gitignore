@@ -17,3 +17,6 @@ Thumbs.db
 .claude/
 run/
 jarvis-ref/
+app/control-api/telegram_bridge.js.bak.*
+docs/canary.md
+docs/review/CANARY_SMOKE.md
