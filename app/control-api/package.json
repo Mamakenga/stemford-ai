@@ -4,8 +4,11 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "migrate": "bash ./scripts/migrate.sh"
+    "test": "bash ./scripts/reliability_gate.sh skip-migrate",
+    "migrate": "bash ./scripts/migrate.sh",
+    "test:smoke": "bash ./scripts/smoke_scenarios.sh",
+    "test:reliability": "bash ./scripts/reliability_scenarios.sh",
+    "test:gate": "bash ./scripts/reliability_gate.sh"
   },
   "keywords": [],
   "author": "",

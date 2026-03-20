@@ -3,6 +3,13 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Autoload /opt/stemford/run/.env when DB vars are not exported in current shell.
+if [ -z "${DATABASE_URL:-}" ] && [ -z "${RAILWAY_DATABASE_URL:-}" ] && [ -f /opt/stemford/run/.env ]; then
+  set -a
+  source /opt/stemford/run/.env
+  set +a
+fi
+
 DB_URL="${DATABASE_URL:-${RAILWAY_DATABASE_URL:-}}"
 if [ -z "${DB_URL}" ]; then
   echo "ERROR: set DATABASE_URL or RAILWAY_DATABASE_URL"
