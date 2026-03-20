@@ -3,6 +3,7 @@
 Version: 2.0
 Date: 2026-03-19
 Status: Active
+Quick link: docs/TECH_INSPECTION_PROTOCOL.md (pre-task health check).
 
 Операционный документ для AI-кодеров на VPS Stemford.
 Стратегический контекст — в `plans/PLAN_Deputies_Launch_Opus.md` (§22).
@@ -627,3 +628,34 @@ CI/CD контур обслуживает кодовую базу системы
 - **CI/CD** (Codex + Claude Code) — разрабатывают и деплоят код Control API, heartbeat-сервиса, дашборда.
 
 Замы не знают о CI/CD. CI/CD не вмешивается в бизнес-логику замов.
+
+---
+
+## 13. Deferred: AAF Patterns We May Adopt Later
+
+Status: Deferred (not in current MVP).
+Goal: improve coder-team autonomy and human-friendly orchestration without weakening CI/CD safety gates.
+
+### Useful patterns to adopt later
+
+1. Event-driven priority queue for tasks and handoffs.
+2. Explicit run lifecycle model (start/resume/interrupt/recover) with one run_id.
+3. Persistent orchestrator as an event router, with worker agents as impulse processes.
+4. Watchdog + self-healing for coder services (auto-diagnose + escalation).
+5. Standardized task-bus handoff between executor/reviewer/deployer.
+6. Task-scoped operational memory (short-lived, auditable, isolated from business memory).
+7. Limited plugin model with strict allowlist.
+
+### Explicitly out of scope now
+
+1. Docker-in-Docker with docker.sock exposure.
+2. Heavy memory stack (GraphRAG + vector + SQL) in coder contour.
+3. Fully autonomous self-modifying loop without human gate.
+4. MTProto userbot mode instead of Telegram Bot API.
+
+### Entry conditions for this deferred block
+
+1. Current coder contour runs stable for 2+ weeks.
+2. Human-readable statuses are fully standardized.
+3. Runbook + rollback are tested for critical deploy paths.
+4. Preflight and alerting cover key failure modes.
