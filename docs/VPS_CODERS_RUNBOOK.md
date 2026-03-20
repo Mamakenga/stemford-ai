@@ -7,6 +7,7 @@ Quick link: docs/TECH_INSPECTION_PROTOCOL.md (pre-task health check).
 
 Операционный документ для AI-кодеров на VPS Stemford.
 Стратегический контекст — в `plans/PLAN_Deputies_Launch_Opus.md` (§22).
+Операционный быстрый старт: `docs/TECH_INSPECTION_PROTOCOL.md`, `docs/OPS_5LINE_REGULATION.md`.
 
 ---
 

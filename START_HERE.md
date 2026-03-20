@@ -229,4 +229,6 @@
 - `npm run validate:secrets`
 - `npm run setup:hooks` (в git-репозитории: подключить локальный pre-commit)
 
-
+## Quick Ops Links
+- docs/TECH_INSPECTION_PROTOCOL.md
+- docs/OPS_5LINE_REGULATION.md
