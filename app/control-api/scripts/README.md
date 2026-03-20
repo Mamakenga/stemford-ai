@@ -15,6 +15,7 @@
 
 ## Smoke Scenarios (§29.4.5)
 - e2e_noop.sh — E2E smoke helper
+- e2e_noop_20260320_v1.sh — E2E smoke helper
 - run cookbook smoke: `bash ./scripts/smoke_scenarios.sh`
 - exits non-zero if any scenario fails
 - auto-cleans created smoke entities (`tasks`, `approval_requests`, `actions_log`) at script exit
