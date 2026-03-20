@@ -136,6 +136,20 @@ bot.on("message", async (msg) => {
   }
 });
 
+bot.onText(/^\/техосмотр$/, async (msg) => {
+  if (!isAllowedMessage(msg)) return;
+  if (!USE_ORCH) return;
+  try {
+    const { stdout } = await callOrchestrator(msg.chat.id, "техосмотр");
+    const reply = String(stdout || "").trim();
+    if (reply) {
+      await bot.sendMessage(msg.chat.id, reply.slice(0, 3900));
+    }
+  } catch (e) {
+    await bot.sendMessage(msg.chat.id, "[Orchestrator | error] " + e.message);
+  }
+});
+
 bot.onText(/^\/start$/, async (msg) => {
   if (!isAllowedMessage(msg)) return;
   await bot.sendMessage(msg.chat.id, "Stemford AI online.\n" + helpText);
