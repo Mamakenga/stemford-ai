@@ -1,8 +1,11 @@
 const TelegramBot = require("node-telegram-bot-api");
 const { Pool } = require("pg");
 const dotenv = require("dotenv");
+const { execFile } = require("child_process");
 
-dotenv.config({ path: "/opt/stemford/run/.env" });
+const envPath = process.env.TELEGRAM_BRIDGE_ENV_FILE || "/opt/stemford/run/.env";
+dotenv.config({ path: envPath });
+console.log("telegram-bridge env path:", envPath);
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const dbUrl = process.env.RAILWAY_DATABASE_URL;
@@ -39,6 +42,22 @@ function isAllowedMessage(msg) {
 }
 const pendingTaskDrafts = new Map();
 const TASK_DRAFT_TTL_MS = 5 * 60 * 1000;
+
+const USE_ORCH = String(process.env.TELEGRAM_BRIDGE_USE_ORCHESTRATOR || "0") === "1";
+
+function callOrchestrator(chatId, text) {
+  return new Promise((resolve, reject) => {
+    execFile(
+      "/opt/stemford/run/orchestrator/orchestrator.sh",
+      [String(chatId), String(text || "")],
+      { timeout: 900000 },
+      (err, stdout, stderr) => {
+        if (err) return reject(err);
+        resolve({ stdout, stderr });
+      }
+    );
+  });
+}
 
 function setTaskDraft(chatId, draft) {
   pendingTaskDrafts.set(chatId, { ...draft, createdAt: Date.now() });
@@ -99,6 +118,23 @@ function inferRouting(title) {
 
 const helpText =
   "Команды:\n/help\n/status\n/task <текст задачи>\n/yes (подтвердить черновик /task)\n/no (отмена черновика /task)\n/tasks [status]\n/approvals\n/approve <approval_id>\n/reject <approval_id> [причина]\n/org\n/goals\n/goal <goal_id>\n/run <task_id>\n/done <task_id>\n/block <task_id> <причина>\n/fail <task_id> <причина>\n/reopen <task_id>";
+
+bot.on("message", async (msg) => {
+  if (!isAllowedMessage(msg)) return;
+  if (!USE_ORCH) return;
+  const messageText = String(msg.text || "").trim();
+  if (!messageText || messageText.startsWith("/")) return;
+
+  try {
+    const { stdout } = await callOrchestrator(msg.chat.id, messageText);
+    const reply = String(stdout || "").trim();
+    if (reply) {
+      await bot.sendMessage(msg.chat.id, reply.slice(0, 3900));
+    }
+  } catch (e) {
+    await bot.sendMessage(msg.chat.id, "[Orchestrator | error] " + e.message);
+  }
+});
 
 bot.onText(/^\/start$/, async (msg) => {
   if (!isAllowedMessage(msg)) return;
