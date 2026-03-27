@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stemford Control Dashboard</title>
+  <style>
+    :root {
+      --bg: #f3f5f7;
+      --panel: #ffffff;
+      --line: #d6dde5;
+      --text: #1f2a36;
+      --muted: #607080;
+      --accent: #0062cc;
+      --warn: #a64d00;
+      --bad: #a32626;
+      --ok: #0a6a3f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      color: var(--text);
+      background: linear-gradient(140deg, #eef2f7 0%, #f9fafb 100%);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      min-height: 100vh;
+      gap: 12px;
+      padding: 12px;
+    }
+    .main, .side {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 0;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+    }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .toolbar input, .toolbar select, .toolbar button, .chat-input input, .chat-input button {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+      background: #fff;
+    }
+    .toolbar button, .chat-input button {
+      cursor: pointer;
+      background: #f8fbff;
+      border-color: #bdd2ec;
+      color: #0f3e70;
+    }
+    .toolbar button:hover, .chat-input button:hover {
+      background: #edf5ff;
+    }
+    .metrics {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .kanban-wrap {
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .kanban {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(260px, 1fr));
+      gap: 10px;
+      min-width: 1600px;
+    }
+    .column {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fbfcfe;
+      min-height: 420px;
+      padding: 8px;
+    }
+    .column h3 {
+      margin: 4px 0 8px;
+      font-size: 13px;
+      color: #1d3551;
+    }
+    .card {
+      border: 1px solid #d3dfed;
+      border-radius: 10px;
+      background: #fff;
+      padding: 8px;
+      margin-bottom: 8px;
+    }
+    .card h4 {
+      margin: 0 0 6px;
+      font-size: 13px;
+      line-height: 1.3;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.4;
+      margin-bottom: 6px;
+      white-space: pre-line;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .actions button {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #f8faff;
+      font-size: 11px;
+      padding: 4px 6px;
+      cursor: pointer;
+    }
+    .approvals-list, .chat-log {
+      max-height: 280px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      background: #fcfdff;
+    }
+    .approval-item, .chat-item {
+      border-bottom: 1px dashed #dbe4ee;
+      padding: 6px 0;
+      font-size: 12px;
+    }
+    .approval-item:last-child, .chat-item:last-child {
+      border-bottom: none;
+    }
+    .chat-item .author {
+      color: #244a72;
+      font-weight: 600;
+    }
+    .chat-item .time {
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .chat-input {
+      margin-top: 8px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+    }
+    .statusbar {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
+    @media (max-width: 1100px) {
+      .layout { grid-template-columns: 1fr; }
+      .side { order: -1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <section class="main">
+      <div class="panel">
+        <div class="toolbar">
+          <label>Actor role:
+            <select id="actorRole">
+              <option value="orchestrator">orchestrator</option>
+              <option value="strategy">strategy</option>
+              <option value="finance">finance</option>
+              <option value="pmo">pmo</option>
+              <option value="human_telegram">human_telegram</option>
+            </select>
+          </label>
+          <label>Plan:
+            <input id="planFilter" placeholder="optional plan_id" />
+          </label>
+          <button id="btnRefresh">Refresh</button>
+          <button id="btnCreateTask">Create Task</button>
+        </div>
+        <div class="metrics" id="metrics"></div>
+      </div>
+
+      <div class="panel kanban-wrap">
+        <div class="kanban" id="kanban"></div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="panel">
+        <h3>Pending Approvals</h3>
+        <div class="approvals-list" id="approvals"></div>
+      </div>
+      <div class="panel">
+        <h3>Ops Chat</h3>
+        <div class="chat-log" id="chatLog"></div>
+        <div class="chat-input">
+          <input id="chatInput" placeholder="Message to team..." />
+          <button id="chatSend">Send</button>
+        </div>
+      </div>
+      <div class="panel statusbar" id="status"></div>
+    </aside>
+  </div>
+
+  <script>
+    const columnsOrder = ["Backlog", "Ready", "In Progress", "Review", "Blocked", "Done"];
+    const actorRoleEl = document.getElementById("actorRole");
+    const planFilterEl = document.getElementById("planFilter");
+    const statusEl = document.getElementById("status");
+    const metricsEl = document.getElementById("metrics");
+    const kanbanEl = document.getElementById("kanban");
+    const approvalsEl = document.getElementById("approvals");
+    const chatLogEl = document.getElementById("chatLog");
+    const chatInputEl = document.getElementById("chatInput");
+
+    function actorRole() {
+      return actorRoleEl.value || "orchestrator";
+    }
+
+    function setStatus(text, kind = "ok") {
+      statusEl.className = `panel statusbar ${kind}`;
+      statusEl.textContent = text;
+    }
+
+    async function apiGet(url) {
+      const r = await fetch(url);
+      const data = await r.json().catch(() => null);
+      if (!r.ok || !data || !data.ok) {
+        const msg = data && data.error ? data.error.message : `HTTP ${r.status}`;
+        throw new Error(msg);
+      }
+      return data.data;
+    }
+
+    async function apiPost(url, body) {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {}),
+      });
+      const data = await r.json().catch(() => null);
+      if (!r.ok || !data || !data.ok) {
+        const msg = data && data.error ? data.error.message : `HTTP ${r.status}`;
+        throw new Error(msg);
+      }
+      return data.data;
+    }
+
+    function renderCard(card) {
+      const wrap = document.createElement("div");
+      wrap.className = "card";
+      const meta = [
+        `id: ${card.id}`,
+        `status: ${card.status}`,
+        `assignee: ${card.assignee}`,
+        card.plan_id ? `plan: ${card.plan_id} / #${card.plan_step_order || "?"}` : "",
+        `start gate: ${card.start_gate_status || "-"}`,
+        `end gate: ${card.end_gate_status || "-"}`,
+      ].filter(Boolean).join("\n");
+
+      wrap.innerHTML = `
+        <h4>${card.title || "(no title)"}</h4>
+        <div class="meta">${meta}</div>
+      `;
+
+      const actions = document.createElement("div");
+      actions.className = "actions";
+
+      const addBtn = (label, fn) => {
+        const b = document.createElement("button");
+        b.textContent = label;
+        b.onclick = fn;
+        actions.appendChild(b);
+      };
+
+      addBtn("Open", async () => {
+        const t = await apiGet(`/tasks/${encodeURIComponent(card.id)}`);
+        alert(JSON.stringify(t, null, 2));
+      });
+
+      addBtn("Start Gate", async () => {
+        await apiPost(`/tasks/${encodeURIComponent(card.id)}/gates/start/request`, {
+          requested_by_role: actorRole(),
+          reason: "start gate requested from dashboard",
+        });
+        await refreshAll();
+      });
+
+      addBtn("Run", async () => {
+        await apiPost(`/tasks/${encodeURIComponent(card.id)}/claim`, { actor_role: actorRole() });
+        await refreshAll();
+      });
+
+      addBtn("End Gate", async () => {
+        await apiPost(`/tasks/${encodeURIComponent(card.id)}/gates/end/request`, {
+          requested_by_role: actorRole(),
+          reason: "end gate requested from dashboard",
+        });
+        await refreshAll();
+      });
+
+      addBtn("Done", async () => {
+        await apiPost(`/tasks/${encodeURIComponent(card.id)}/complete`, {
+          actor_role: actorRole(),
+          summary: "done via dashboard",
+        });
+        await refreshAll();
+      });
+
+      addBtn("Block", async () => {
+        const reason = prompt("Block reason:");
+        if (!reason) return;
+        await apiPost(`/tasks/${encodeURIComponent(card.id)}/block`, {
+          actor_role: actorRole(),
+          reason,
+        });
+        await refreshAll();
+      });
+
+      addBtn("Reopen", async () => {
+        await apiPost(`/tasks/${encodeURIComponent(card.id)}/reopen`, { actor_role: actorRole() });
+        await refreshAll();
+      });
+
+      wrap.appendChild(actions);
+      return wrap;
+    }
+
+    function renderKanban(columns) {
+      kanbanEl.innerHTML = "";
+      for (const name of columnsOrder) {
+        const col = document.createElement("div");
+        col.className = "column";
+        const items = (columns && columns[name]) || [];
+        const h = document.createElement("h3");
+        h.textContent = `${name} (${items.length})`;
+        col.appendChild(h);
+        for (const item of items) col.appendChild(renderCard(item));
+        kanbanEl.appendChild(col);
+      }
+    }
+
+    function renderApprovals(items) {
+      approvalsEl.innerHTML = "";
+      if (!items.length) {
+        approvalsEl.textContent = "No pending approvals.";
+        return;
+      }
+
+      for (const a of items) {
+        const d = document.createElement("div");
+        d.className = "approval-item";
+        d.innerHTML = `
+          <div><strong>${a.approval_id}</strong></div>
+          <div>${a.action_class} | ${a.entity_type}:${a.entity_id}</div>
+          <div>requested by ${a.requested_by_role}, approver ${a.approver_role}</div>
+        `;
+
+        const row = document.createElement("div");
+        row.className = "actions";
+        const approveBtn = document.createElement("button");
+        approveBtn.textContent = "Approve";
+        approveBtn.onclick = async () => {
+          await apiPost("/approvals/decide", {
+            approval_id: a.approval_id,
+            decision: "approved",
+            decided_by_role: actorRole(),
+            reason: "approved from dashboard",
+          });
+          await refreshAll();
+        };
+        const rejectBtn = document.createElement("button");
+        rejectBtn.textContent = "Reject";
+        rejectBtn.onclick = async () => {
+          const reason = prompt("Reject reason:") || "rejected from dashboard";
+          await apiPost("/approvals/decide", {
+            approval_id: a.approval_id,
+            decision: "rejected",
+            decided_by_role: actorRole(),
+            reason,
+          });
+          await refreshAll();
+        };
+        row.appendChild(approveBtn);
+        row.appendChild(rejectBtn);
+        d.appendChild(row);
+        approvalsEl.appendChild(d);
+      }
+    }
+
+    function renderChat(items) {
+      chatLogEl.innerHTML = "";
+      for (const m of items) {
+        const d = document.createElement("div");
+        d.className = "chat-item";
+        d.innerHTML = `
+          <div><span class="author">${m.author_role}</span> ${m.task_id ? `(task ${m.task_id})` : ""}</div>
+          <div>${m.message}</div>
+          <div class="time">${m.created_at || ""}</div>
+        `;
+        chatLogEl.appendChild(d);
+      }
+      chatLogEl.scrollTop = chatLogEl.scrollHeight;
+    }
+
+    async function refreshBoard() {
+      const params = new URLSearchParams({ view: "kanban" });
+      if (planFilterEl.value.trim()) params.set("plan_id", planFilterEl.value.trim());
+      const data = await apiGet(`/tasks?${params.toString()}`);
+      renderKanban(data.columns || {});
+      const total = columnsOrder.reduce((sum, k) => sum + ((data.columns && data.columns[k] ? data.columns[k].length : 0)), 0);
+      metricsEl.textContent = `Tasks in board: ${total}`;
+    }
+
+    async function refreshApprovals() {
+      const data = await apiGet("/approvals/pending");
+      renderApprovals(data.items || []);
+    }
+
+    async function refreshChat() {
+      const data = await apiGet(`/chat/messages?actor_role=${encodeURIComponent(actorRole())}&limit=60`);
+      renderChat(data.items || []);
+    }
+
+    async function refreshAll() {
+      try {
+        await Promise.all([refreshBoard(), refreshApprovals(), refreshChat()]);
+        setStatus(`Updated at ${new Date().toLocaleTimeString()}`, "ok");
+      } catch (e) {
+        setStatus(`Error: ${e.message}`, "bad");
+      }
+    }
+
+    document.getElementById("btnRefresh").onclick = refreshAll;
+    document.getElementById("btnCreateTask").onclick = async () => {
+      try {
+        const title = prompt("Task title:");
+        if (!title) return;
+        const goal = prompt("Primary goal id:", "goal_a_positioning_brief") || "goal_a_positioning_brief";
+        const assignee = prompt("Assignee role:", "pmo") || "pmo";
+        const planId = prompt("Plan id (optional):", "") || null;
+        const stepOrderRaw = prompt("Plan step order (optional number):", "") || "";
+        const requiresStart = confirm("Require START approval?");
+        const requiresEnd = confirm("Require END approval?");
+        await apiPost("/tasks", {
+          title,
+          primary_goal_id: goal,
+          assignee,
+          actor_role: actorRole(),
+          plan_id: planId || null,
+          plan_step_order: stepOrderRaw ? Number(stepOrderRaw) : null,
+          requires_start_approval: requiresStart,
+          requires_end_approval: requiresEnd,
+        });
+        await refreshAll();
+      } catch (e) {
+        setStatus(`Create task error: ${e.message}`, "bad");
+      }
+    };
+
+    document.getElementById("chatSend").onclick = async () => {
+      const msg = chatInputEl.value.trim();
+      if (!msg) return;
+      try {
+        await apiPost("/chat/messages", {
+          actor_role: actorRole(),
+          message: msg,
+        });
+        chatInputEl.value = "";
+        await refreshChat();
+      } catch (e) {
+        setStatus(`Chat error: ${e.message}`, "bad");
+      }
+    };
+
+    actorRoleEl.onchange = refreshAll;
+    planFilterEl.onchange = refreshAll;
+
+    refreshAll();
+    setInterval(refreshAll, 5000);
+  </script>
+</body>
+</html>

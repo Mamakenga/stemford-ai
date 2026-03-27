@@ -1,5 +1,6 @@
 const express = require("express");
 const fs = require("fs");
+const path = require("path");
 const { Pool } = require("pg");
 const dotenv = require("dotenv");
 
@@ -58,6 +59,7 @@ const CRITICAL_TELEGRAM_ACTIONS = new Set(["task_failed", "retry_limit_exceeded"
 
 const app = express();
 app.use(express.json());
+app.use("/web", express.static(path.join(__dirname, "public")));
 
 const conn = process.env.RAILWAY_DATABASE_URL;
 
@@ -118,6 +120,49 @@ function includesSensitiveMarkers(text) {
   return /(password|passwd|token|secret|api[_ -]?key|парол|токен|секрет|ключ\s*api)/i.test(value);
 }
 
+function normalizeTaskRowForView(row) {
+  return {
+    ...row,
+    requires_start_approval: Boolean(row.requires_start_approval),
+    requires_end_approval: Boolean(row.requires_end_approval),
+  };
+}
+
+function computeKanbanColumn(row) {
+  const task = normalizeTaskRowForView(row);
+  const status = String(task.status || "").trim();
+  if (status === "backlog") return "Backlog";
+  if (status === "blocked" || status === "failed") return "Blocked";
+  if (status === "done") return "Done";
+  if (status === "todo") {
+    if (!task.requires_start_approval || task.start_gate_status === "approved") return "Ready";
+    return "Backlog";
+  }
+  if (status === "in_progress") {
+    if (task.requires_end_approval && task.end_gate_status === "pending") return "Review";
+    return "In Progress";
+  }
+  return "Backlog";
+}
+
+function buildKanbanColumns(tasks) {
+  const columns = {
+    Backlog: [],
+    Ready: [],
+    "In Progress": [],
+    Review: [],
+    Blocked: [],
+    Done: [],
+  };
+
+  for (const row of tasks) {
+    const col = computeKanbanColumn(row);
+    columns[col].push(normalizeTaskRowForView(row));
+  }
+
+  return columns;
+}
+
 function toHumanFeedText(row) {
   const payload = row && row.payload && typeof row.payload === "object" ? row.payload : {};
   const actor = row.actor_role || "system";
@@ -166,6 +211,10 @@ function toHumanFeedText(row) {
 }
 
 app.get("/health", (_req, res) => ok(res, { service: "stemford-control-api", PORT }));
+
+app.get("/dashboard", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "dashboard.html"));
+});
 
 app.get("/db/ping", async (_req, res) => {
   try {
@@ -251,6 +300,28 @@ app.get("/diagnostics", async (_req, res) => {
   }
 });
 
+app.get("/health/summary", async (_req, res) => {
+  try {
+    const q = await pool.query(
+      `select
+         (select count(*)::int from tasks where status in ('todo','in_progress','blocked')) as open_tasks,
+         (select count(*)::int from approval_requests where status = 'pending') as pending_approvals,
+         (select count(*)::int from agent_runs where status = 'dead_letter') as dead_letter_runs`
+    );
+    const row = q.rows[0] || { open_tasks: 0, pending_approvals: 0, dead_letter_runs: 0 };
+    return ok(res, {
+      service: "stemford-control-api",
+      status: "ok",
+      open_tasks: row.open_tasks,
+      pending_approvals: row.pending_approvals,
+      dead_letter_runs: row.dead_letter_runs,
+      uptime_sec: Math.floor(process.uptime()),
+    });
+  } catch (e) {
+    return fail(res, 500, "health_summary_failed", e.message);
+  }
+});
+
 app.get("/org/chart", async (_req, res) => {
   try {
     const roles = await pool.query(
@@ -332,7 +403,7 @@ app.get("/goals/:id/ancestry", async (req, res) => {
 });
 
 app.get("/tasks", async (req, res) => {
-  const { status, assignee, goal_id } = req.query;
+  const { status, assignee, goal_id, plan_id, view } = req.query;
   const where = [];
   const vals = [];
 
@@ -348,15 +419,24 @@ app.get("/tasks", async (req, res) => {
     vals.push(goal_id);
     where.push(`primary_goal_id = $${vals.length}`);
   }
+  if (plan_id) {
+    vals.push(plan_id);
+    where.push(`plan_id = $${vals.length}`);
+  }
 
   const sql = `
-    select id,title,primary_goal_id,status,assignee,due_at,retry_attempt,retry_after
+    select id,title,primary_goal_id,status,assignee,due_at,retry_attempt,retry_after,
+           plan_id,plan_step_order,
+           requires_start_approval,requires_end_approval,
+           start_gate_approval_id,start_gate_status,
+           end_gate_approval_id,end_gate_status,
+           claimed_by,claimed_at,completed_at,status_reason
     from tasks
     ${where.length ? "where " + where.join(" and ") : ""}
     order by due_at nulls last, id
   `;
   const legacySql = `
-    select id,title,primary_goal_id,status,assignee,due_at
+    select id,title,primary_goal_id,status,assignee,due_at,claimed_by,claimed_at,completed_at,status_reason
     from tasks
     ${where.length ? "where " + where.join(" and ") : ""}
     order by due_at nulls last, id
@@ -364,24 +444,93 @@ app.get("/tasks", async (req, res) => {
 
   try {
     const q = await pool.query(sql, vals);
-    ok(res, { count: q.rowCount, tasks: q.rows });
+    const tasks = q.rows.map(normalizeTaskRowForView);
+    if (String(view || "").trim().toLowerCase() === "kanban") {
+      return ok(res, { view: "kanban", count: tasks.length, columns: buildKanbanColumns(tasks) });
+    }
+    ok(res, { count: tasks.length, tasks });
   } catch (e) {
     const msg = String(e?.message || "");
-    const missingRetryColumn = e?.code === "42703" && /retry_attempt|retry_after/i.test(msg);
-    if (missingRetryColumn) {
+    const missingExtendedColumn =
+      e?.code === "42703" &&
+      /retry_attempt|retry_after|plan_id|plan_step_order|requires_start_approval|requires_end_approval|start_gate_approval_id|start_gate_status|end_gate_approval_id|end_gate_status|claimed_by|claimed_at|completed_at|status_reason/i.test(msg);
+    if (missingExtendedColumn) {
       try {
         const qLegacy = await pool.query(legacySql, vals);
         const tasks = qLegacy.rows.map((row) => ({
           ...row,
           retry_attempt: 0,
           retry_after: null,
+          plan_id: null,
+          plan_step_order: null,
+          requires_start_approval: false,
+          requires_end_approval: false,
+          start_gate_approval_id: null,
+          start_gate_status: null,
+          end_gate_approval_id: null,
+          end_gate_status: null,
         }));
-        return ok(res, { count: qLegacy.rowCount, tasks });
+        if (String(view || "").trim().toLowerCase() === "kanban") {
+          return ok(res, { view: "kanban", count: tasks.length, columns: buildKanbanColumns(tasks) });
+        }
+        return ok(res, { count: qLegacy.rowCount, tasks: tasks.map(normalizeTaskRowForView) });
       } catch (legacyErr) {
         return fail(res, 500, "tasks_query_failed", legacyErr.message);
       }
     }
     fail(res, 500, "tasks_query_failed", e.message);
+  }
+});
+
+app.get("/tasks/:id", async (req, res) => {
+  const taskId = String(req.params.id || "").trim();
+  if (!taskId) return fail(res, 400, "validation_error", "task id is required");
+
+  try {
+    const q = await pool.query(
+      `select id,title,primary_goal_id,status,assignee,due_at,retry_attempt,retry_after,
+              plan_id,plan_step_order,
+              requires_start_approval,requires_end_approval,
+              start_gate_approval_id,start_gate_status,
+              end_gate_approval_id,end_gate_status,
+              claimed_by,claimed_at,completed_at,status_reason
+       from tasks
+       where id = $1`,
+      [taskId]
+    );
+    if (q.rowCount === 0) return fail(res, 404, "not_found", "task not found");
+    return ok(res, normalizeTaskRowForView(q.rows[0]));
+  } catch (e) {
+    const msg = String(e?.message || "");
+    const missingExtendedColumn =
+      e?.code === "42703" &&
+      /retry_attempt|retry_after|plan_id|plan_step_order|requires_start_approval|requires_end_approval|start_gate_approval_id|start_gate_status|end_gate_approval_id|end_gate_status|claimed_by|claimed_at|completed_at|status_reason/i.test(msg);
+    if (!missingExtendedColumn) return fail(res, 500, "task_query_failed", e.message);
+
+    try {
+      const qLegacy = await pool.query(
+        `select id,title,primary_goal_id,status,assignee,due_at,claimed_by,claimed_at,completed_at,status_reason
+         from tasks
+         where id = $1`,
+        [taskId]
+      );
+      if (qLegacy.rowCount === 0) return fail(res, 404, "not_found", "task not found");
+      return ok(res, normalizeTaskRowForView({
+        ...qLegacy.rows[0],
+        retry_attempt: 0,
+        retry_after: null,
+        plan_id: null,
+        plan_step_order: null,
+        requires_start_approval: false,
+        requires_end_approval: false,
+        start_gate_approval_id: null,
+        start_gate_status: null,
+        end_gate_approval_id: null,
+        end_gate_status: null,
+      }));
+    } catch (legacyErr) {
+      return fail(res, 500, "task_query_failed", legacyErr.message);
+    }
   }
 });
 
@@ -434,6 +583,86 @@ app.get("/actions/feed", async (req, res) => {
     return ok(res, { count: items.length, format: "human", items });
   } catch (e) {
     return fail(res, 500, "actions_feed_failed", e.message);
+  }
+});
+
+app.get("/chat/messages", async (req, res) => {
+  const actor_role = String(req.query.actor_role || "orchestrator").trim();
+  const task_id = req.query.task_id ? String(req.query.task_id).trim() : "";
+  const limit = parsePositiveInt(req.query.limit, 50, 200);
+  const allowed = await requireToolAccess(
+    res,
+    actor_role,
+    "chat.read",
+    { entity_type: "chat", entity_id: task_id || "global" }
+  );
+  if (!allowed) return;
+
+  try {
+    const vals = [];
+    const where = [];
+    if (task_id) {
+      vals.push(task_id);
+      where.push(`task_id = $${vals.length}`);
+    }
+    vals.push(limit);
+    const q = await pool.query(
+      `select id,task_id,author_role,message,created_at
+       from chat_messages
+       ${where.length ? "where " + where.join(" and ") : ""}
+       order by created_at desc
+       limit $${vals.length}`,
+      vals
+    );
+    const items = q.rows
+      .map((row) => ({ ...row, created_at: toIsoTimestamp(row.created_at) }))
+      .reverse();
+    return ok(res, { count: items.length, items });
+  } catch (e) {
+    return fail(res, 500, "chat_messages_query_failed", e.message);
+  }
+});
+
+app.post("/chat/messages", async (req, res) => {
+  const actor_role = String(req.body?.actor_role || "").trim();
+  const message = String(req.body?.message || "").trim();
+  const task_id = req.body?.task_id ? String(req.body.task_id).trim() : null;
+  if (!actor_role || !message) {
+    return fail(res, 400, "validation_error", "actor_role and message are required");
+  }
+  if (message.length > 2000) {
+    return fail(res, 400, "validation_error", "message is too long (max 2000 chars)");
+  }
+
+  const allowed = await requireToolAccess(
+    res,
+    actor_role,
+    "chat.write",
+    { entity_type: "chat", entity_id: task_id || "global" }
+  );
+  if (!allowed) return;
+
+  try {
+    if (task_id) {
+      const taskCheck = await pool.query(`select id from tasks where id = $1`, [task_id]);
+      if (taskCheck.rowCount === 0) return fail(res, 404, "not_found", "task not found");
+    }
+
+    const idValue = id("msg");
+    const q = await pool.query(
+      `insert into chat_messages (id,task_id,author_role,message)
+       values ($1,$2,$3,$4)
+       returning id,task_id,author_role,message,created_at`,
+      [idValue, task_id, actor_role, message]
+    );
+    const row = q.rows[0];
+    await writeAction("chat_message_posted", "chat", row.id, actor_role, {
+      task_id: row.task_id || null,
+      preview: row.message.slice(0, 140),
+    });
+    return ok(res, { ...row, created_at: toIsoTimestamp(row.created_at) });
+  } catch (e) {
+    return fail(res, 500, "chat_message_post_failed", e.message);
   }
 });
 
@@ -631,8 +860,11 @@ const ROLE_ACTION_WHITELIST = {
   orchestrator: new Set([
     "tasks.write",
     "tasks.retry",
+    "tasks.gate.request",
     "memory.read",
     "memory.write",
+    "chat.read",
+    "chat.write",
     "approvals.decide",
     "approvals.request.safe_read",
     "approvals.request.internal_write",
@@ -646,8 +878,11 @@ const ROLE_ACTION_WHITELIST = {
   strategy: new Set([
     "tasks.write",
     "tasks.retry",
+    "tasks.gate.request",
     "memory.read",
     "memory.write",
+    "chat.read",
+    "chat.write",
     "approvals.decide",
     "approvals.request.safe_read",
     "approvals.request.internal_write",
@@ -657,8 +892,11 @@ const ROLE_ACTION_WHITELIST = {
   finance: new Set([
     "tasks.write",
     "tasks.retry",
+    "tasks.gate.request",
     "memory.read",
     "memory.write",
+    "chat.read",
+    "chat.write",
     "approvals.decide",
     "approvals.request.safe_read",
     "approvals.request.internal_write",
@@ -668,14 +906,18 @@ const ROLE_ACTION_WHITELIST = {
   pmo: new Set([
     "tasks.write",
     "tasks.retry",
+    "tasks.gate.request",
     "memory.read",
     "memory.write",
+    "chat.read",
+    "chat.write",
     "approvals.request.safe_read",
     "approvals.request.internal_write",
     "runtime.read",
   ]),
   system_watchdog: new Set([
     "memory.write",
+    "chat.read",
     "runtime.accept",
     "runtime.retry",
     "runtime.read",
@@ -1023,6 +1265,61 @@ app.get("/approvals/pending", async (req, res) => {
   }
 });
 
+app.get("/approvals/pending/summary", async (req, res) => {
+  try {
+    const q = await pool.query(
+      `select approver_role, action_class, count(*)::int as cnt
+       from approval_requests
+       where status = 'pending'
+       group by approver_role, action_class
+       order by approver_role, action_class`
+    );
+    const totals = q.rows.reduce((acc, row) => acc + Number(row.cnt || 0), 0);
+    return ok(res, { total_pending: totals, by_role_and_class: q.rows });
+  } catch (e) {
+    return fail(res, 500, "approval_pending_summary_failed", e.message);
+  }
+});
+
+async function applyTaskGateDecision(row, decidedByRole) {
+  const gateType = row.entity_type === "task_start_gate"
+    ? "start"
+    : row.entity_type === "task_end_gate"
+      ? "end"
+      : null;
+  if (!gateType) return;
+
+  const statusColumn = gateType === "start" ? "start_gate_status" : "end_gate_status";
+  const approvalColumn = gateType === "start" ? "start_gate_approval_id" : "end_gate_approval_id";
+  const payload = {
+    approval_id: row.approval_id,
+    decision: row.status,
+    gate_kind: gateType,
+  };
+
+  if (row.status === "approved") {
+    await pool.query(
+      `update tasks
+       set ${statusColumn} = 'approved'
+       where id = $1
+         and ${approvalColumn} = $2`,
+      [row.entity_id, row.approval_id]
+    );
+  } else {
+    await pool.query(
+      `update tasks
+       set ${statusColumn} = 'rejected',
+           status = case when status = 'done' then status else 'blocked' end,
+           status_reason = $3
+       where id = $1
+         and ${approvalColumn} = $2`,
+      [row.entity_id, row.approval_id, `${gateType} gate rejected`]
+    );
+  }
+
+  await writeAction("task_gate_decision_applied", "task", row.entity_id, decidedByRole, payload);
+}
+
 app.post("/approvals/decide", async (req, res) => {
   const { approval_id, decision, decided_by_role, reason } = req.body || {};
   if (!approval_id || !decision || !decided_by_role) {
@@ -1065,6 +1362,7 @@ app.post("/approvals/decide", async (req, res) => {
     }
 
     const row = q.rows[0];
+    await applyTaskGateDecision(row, decided_by_role);
     await writeAction(`approval_${decision}`, row.entity_type, row.entity_id, decided_by_role, { approval_id: row.approval_id, reason: row.reason || null });
 
     return ok(res, row);
@@ -1077,11 +1375,31 @@ app.post("/approvals/decide", async (req, res) => {
 // Runtime bridge: claim task
 
 app.post("/tasks", async (req, res) => {
-  const { title, primary_goal_id, assignee, due_at, actor_role } = req.body || {};
+  const {
+    title,
+    primary_goal_id,
+    assignee,
+    due_at,
+    actor_role,
+    plan_id,
+    plan_step_order,
+    requires_start_approval,
+    requires_end_approval,
+  } = req.body || {};
 
   if (!title || !primary_goal_id || !assignee || !actor_role) {
     return fail(res, 400, "validation_error", "title, primary_goal_id, assignee, actor_role are required");
   }
+  const effectivePlanId = plan_id ? String(plan_id).trim() : null;
+  const effectivePlanStepOrder = plan_step_order == null ? null : Number.parseInt(String(plan_step_order), 10);
+  if (effectivePlanStepOrder != null && (!Number.isInteger(effectivePlanStepOrder) || effectivePlanStepOrder <= 0)) {
+    return fail(res, 400, "validation_error", "plan_step_order must be a positive integer");
+  }
+  if (effectivePlanStepOrder != null && !effectivePlanId) {
+    return fail(res, 400, "validation_error", "plan_id is required when plan_step_order is provided");
+  }
+  const requireStart = parseBoolean(requires_start_approval, false);
+  const requireEnd = parseBoolean(requires_end_approval, false);
   {
     const allowed = await requireToolAccess(
       res,
@@ -1095,22 +1413,196 @@ app.post("/tasks", async (req, res) => {
   try {
     const taskId = id("tg");
     const q = await pool.query(
-      `insert into tasks (id,title,primary_goal_id,status,assignee,due_at)
-       values ($1,$2,$3,'todo',$4,$5)
-       returning id,title,primary_goal_id,status,assignee,due_at`,
-      [taskId, title, primary_goal_id, assignee, due_at || null]
+      `insert into tasks (
+         id,title,primary_goal_id,status,assignee,due_at,
+         plan_id,plan_step_order,
+         requires_start_approval,requires_end_approval,
+         start_gate_status,end_gate_status
+       )
+       values ($1,$2,$3,'todo',$4,$5,$6,$7,$8,$9,$10,$11)
+       returning id,title,primary_goal_id,status,assignee,due_at,
+                 plan_id,plan_step_order,
+                 requires_start_approval,requires_end_approval,
+                 start_gate_approval_id,start_gate_status,end_gate_approval_id,end_gate_status`,
+      [
+        taskId,
+        title,
+        primary_goal_id,
+        assignee,
+        due_at || null,
+        effectivePlanId,
+        effectivePlanStepOrder,
+        requireStart,
+        requireEnd,
+        requireStart ? "pending" : null,
+        requireEnd ? "pending" : null,
+      ]
     );
 
-    const row = q.rows[0];
+    const row = normalizeTaskRowForView(q.rows[0]);
     await writeAction("task_created", "task", row.id, actor_role, {
       title: row.title,
       goal_id: row.primary_goal_id,
-      assignee: row.assignee
+      assignee: row.assignee,
+      plan_id: row.plan_id,
+      plan_step_order: row.plan_step_order,
+      requires_start_approval: row.requires_start_approval,
+      requires_end_approval: row.requires_end_approval,
     });
 
     return ok(res, row);
   } catch (e) {
     return fail(res, 500, "task_create_failed", e.message);
+  }
+});
+
+async function createTaskGateApproval({
+  taskId,
+  gateKind,
+  requestedByRole,
+  approverRole,
+  reason,
+}) {
+  const gateColumnPrefix = gateKind === "start" ? "start" : "end";
+  const requireColumn = gateKind === "start" ? "requires_start_approval" : "requires_end_approval";
+  const approvalColumn = gateKind === "start" ? "start_gate_approval_id" : "end_gate_approval_id";
+  const statusColumn = gateKind === "start" ? "start_gate_status" : "end_gate_status";
+  const entityType = gateKind === "start" ? "task_start_gate" : "task_end_gate";
+
+  const taskQ = await pool.query(
+    `select id,status,${requireColumn} as gate_required,${approvalColumn} as approval_id,${statusColumn} as gate_status
+     from tasks
+     where id = $1`,
+    [taskId]
+  );
+  if (taskQ.rowCount === 0) return { ok: false, status: 404, code: "not_found", message: "task not found" };
+
+  const task = taskQ.rows[0];
+  if (!task.gate_required) {
+    return { ok: false, status: 409, code: "gate_not_required", message: `${gateColumnPrefix} gate is not required for this task` };
+  }
+
+  if (task.gate_status === "approved") {
+    return { ok: false, status: 409, code: "gate_already_approved", message: `${gateColumnPrefix} gate is already approved` };
+  }
+
+  if (task.approval_id) {
+    const approvalQ = await pool.query(
+      `select approval_id,status,approver_role,created_at
+       from approval_requests
+       where approval_id = $1`,
+      [task.approval_id]
+    );
+    if (approvalQ.rowCount > 0 && approvalQ.rows[0].status === "pending") {
+      return {
+        ok: true,
+        reused: true,
+        approval_id: approvalQ.rows[0].approval_id,
+        status: approvalQ.rows[0].status,
+        approver_role: approvalQ.rows[0].approver_role,
+        gate_kind: gateKind,
+      };
+    }
+  }
+
+  const approvalId = id("apr");
+  const effectiveApprover = String(approverRole || "strategy").trim();
+
+  await pool.query(
+    `insert into approval_requests
+     (approval_id, action_class, entity_type, entity_id, requested_by_role, approver_role, status, reason)
+     values ($1,'internal_write',$2,$3,$4,$5,'pending',$6)`,
+    [approvalId, entityType, taskId, requestedByRole, effectiveApprover, reason || null]
+  );
+
+  await pool.query(
+    `update tasks
+     set ${approvalColumn} = $2,
+         ${statusColumn} = 'pending'
+     where id = $1`,
+    [taskId, approvalId]
+  );
+
+  await writeAction("approval_requested", entityType, taskId, requestedByRole, {
+    approval_id: approvalId,
+    action_class: "internal_write",
+    approver_role: effectiveApprover,
+    gate_kind: gateKind,
+  });
+
+  return {
+    ok: true,
+    reused: false,
+    approval_id: approvalId,
+    status: "pending",
+    approver_role: effectiveApprover,
+    gate_kind: gateKind,
+  };
+}
+
+app.post("/tasks/:id/gates/start/request", async (req, res) => {
+  const taskId = String(req.params.id || "").trim();
+  const requestedByRole = String(req.body?.requested_by_role || "").trim();
+  const approverRole = req.body?.approver_role ? String(req.body.approver_role).trim() : null;
+  const reason = req.body?.reason ? String(req.body.reason) : null;
+
+  if (!taskId || !requestedByRole) {
+    return fail(res, 400, "validation_error", "task id and requested_by_role are required");
+  }
+
+  const allowed = await requireToolAccess(
+    res,
+    requestedByRole,
+    "tasks.gate.request",
+    { entity_type: "task", entity_id: taskId }
+  );
+  if (!allowed) return;
+
+  try {
+    const result = await createTaskGateApproval({
+      taskId,
+      gateKind: "start",
+      requestedByRole,
+      approverRole,
+      reason,
+    });
+    if (!result.ok) return fail(res, result.status, result.code, result.message);
+    return ok(res, result);
+  } catch (e) {
+    return fail(res, 500, "start_gate_request_failed", e.message);
+  }
+});
+
+app.post("/tasks/:id/gates/end/request", async (req, res) => {
+  const taskId = String(req.params.id || "").trim();
+  const requestedByRole = String(req.body?.requested_by_role || "").trim();
+  const approverRole = req.body?.approver_role ? String(req.body.approver_role).trim() : null;
+  const reason = req.body?.reason ? String(req.body.reason) : null;
+
+  if (!taskId || !requestedByRole) {
+    return fail(res, 400, "validation_error", "task id and requested_by_role are required");
+  }
+
+  const allowed = await requireToolAccess(
+    res,
+    requestedByRole,
+    "tasks.gate.request",
+    { entity_type: "task", entity_id: taskId }
+  );
+  if (!allowed) return;
+
+  try {
+    const result = await createTaskGateApproval({
+      taskId,
+      gateKind: "end",
+      requestedByRole,
+      approverRole,
+      reason,
+    });
+    if (!result.ok) return fail(res, result.status, result.code, result.message);
+    return ok(res, result);
+  } catch (e) {
+    return fail(res, 500, "end_gate_request_failed", e.message);
   }
 });
 
@@ -1132,6 +1624,77 @@ app.post("/tasks/:id/claim", async (req, res) => {
   }
 
   try {
+    const taskStateQ = await pool.query(
+      `select id,status,retry_after,plan_id,plan_step_order,
+              requires_start_approval,start_gate_status,start_gate_approval_id
+       from tasks
+       where id = $1`,
+      [taskId]
+    );
+    if (taskStateQ.rowCount === 0) {
+      return fail(res, 404, "not_found", "task not found");
+    }
+
+    const taskState = taskStateQ.rows[0];
+    if (taskState.requires_start_approval && taskState.start_gate_status !== "approved") {
+      let approval_status = null;
+      if (taskState.start_gate_approval_id) {
+        const appr = await pool.query(
+          `select status
+           from approval_requests
+           where approval_id = $1`,
+          [taskState.start_gate_approval_id]
+        );
+        approval_status = appr.rowCount > 0 ? appr.rows[0].status : null;
+      }
+      return res.status(409).json({
+        ok: false,
+        error: {
+          code: "start_gate_not_approved",
+          message: "task cannot start before start gate approval",
+          details: {
+            task_id: taskId,
+            start_gate_status: taskState.start_gate_status || "pending",
+            start_gate_approval_id: taskState.start_gate_approval_id || null,
+            approval_status,
+          },
+        },
+        meta: { schema_version: "v1", ts: new Date().toISOString() },
+      });
+    }
+
+    if (taskState.plan_id && taskState.plan_step_order != null) {
+      const blockingQ = await pool.query(
+        `select id,plan_step_order,status
+         from tasks
+         where plan_id = $1
+           and plan_step_order < $2
+           and status <> 'done'
+         order by plan_step_order desc
+         limit 1`,
+        [taskState.plan_id, taskState.plan_step_order]
+      );
+      if (blockingQ.rowCount > 0) {
+        const blocker = blockingQ.rows[0];
+        return res.status(409).json({
+          ok: false,
+          error: {
+            code: "plan_step_blocked",
+            message: `previous plan step is not done: ${blocker.id}`,
+            details: {
+              task_id: taskId,
+              plan_id: taskState.plan_id,
+              step_order: taskState.plan_step_order,
+              blocking_task_id: blocker.id,
+              blocking_step_order: blocker.plan_step_order,
+              blocking_status: blocker.status,
+            },
+          },
+          meta: { schema_version: "v1", ts: new Date().toISOString() },
+        });
+      }
+    }
+
     const q = await pool.query(
       `
       UPDATE tasks
@@ -1141,7 +1704,10 @@ app.post("/tasks/:id/claim", async (req, res) => {
       WHERE id = $1
         AND status IN ('todo','blocked')
         AND (retry_after IS NULL OR retry_after <= now())
-      RETURNING id,title,status,assignee,claimed_by,claimed_at,primary_goal_id,retry_after
+      RETURNING id,title,status,assignee,claimed_by,claimed_at,primary_goal_id,retry_after,
+                plan_id,plan_step_order,
+                requires_start_approval,requires_end_approval,
+                start_gate_approval_id,start_gate_status,end_gate_approval_id,end_gate_status
       `,
       [taskId, actor_role]
     );
@@ -1170,11 +1736,13 @@ app.post("/tasks/:id/claim", async (req, res) => {
       return fail(res, 409, "not_claimable", "task is not in todo/blocked or does not exist");
     }
 
-    const row = q.rows[0];
+    const row = normalizeTaskRowForView(q.rows[0]);
     await writeAction("task_claimed", "task", row.id, actor_role, {
       claimed_by: row.claimed_by,
       claimed_at: row.claimed_at,
-      goal_id: row.primary_goal_id
+      goal_id: row.primary_goal_id,
+      plan_id: row.plan_id,
+      plan_step_order: row.plan_step_order,
     });
 
     return ok(res, row);
@@ -1203,6 +1771,43 @@ app.post("/tasks/:id/complete", async (req, res) => {
   }
 
   try {
+    const taskStateQ = await pool.query(
+      `select id,status,requires_end_approval,end_gate_status,end_gate_approval_id,plan_id,plan_step_order
+       from tasks
+       where id = $1`,
+      [taskId]
+    );
+    if (taskStateQ.rowCount === 0) {
+      return fail(res, 404, "not_found", "task not found");
+    }
+    const taskState = taskStateQ.rows[0];
+    if (taskState.requires_end_approval && taskState.end_gate_status !== "approved") {
+      let approval_status = null;
+      if (taskState.end_gate_approval_id) {
+        const appr = await pool.query(
+          `select status
+           from approval_requests
+           where approval_id = $1`,
+          [taskState.end_gate_approval_id]
+        );
+        approval_status = appr.rowCount > 0 ? appr.rows[0].status : null;
+      }
+      return res.status(409).json({
+        ok: false,
+        error: {
+          code: "end_gate_not_approved",
+          message: "task cannot be completed before end gate approval",
+          details: {
+            task_id: taskId,
+            end_gate_status: taskState.end_gate_status || "pending",
+            end_gate_approval_id: taskState.end_gate_approval_id || null,
+            approval_status,
+          },
+        },
+        meta: { schema_version: "v1", ts: new Date().toISOString() },
+      });
+    }
+
     const q = await pool.query(
       `
       UPDATE tasks
@@ -1211,7 +1816,10 @@ app.post("/tasks/:id/complete", async (req, res) => {
           status_reason = NULL
       WHERE id = $1
         AND status IN ('in_progress','blocked','todo')
-      RETURNING id,title,status,assignee,claimed_by,claimed_at,completed_at,primary_goal_id
+      RETURNING id,title,status,assignee,claimed_by,claimed_at,completed_at,primary_goal_id,
+                plan_id,plan_step_order,
+                requires_start_approval,requires_end_approval,
+                start_gate_approval_id,start_gate_status,end_gate_approval_id,end_gate_status
       `,
       [taskId]
     );
@@ -1220,11 +1828,13 @@ app.post("/tasks/:id/complete", async (req, res) => {
       return fail(res, 409, "not_completable", "task is not in progress/blocked/todo or does not exist");
     }
 
-    const row = q.rows[0];
+    const row = normalizeTaskRowForView(q.rows[0]);
     await writeAction("task_completed", "task", row.id, actor_role, {
       completed_at: row.completed_at,
       goal_id: row.primary_goal_id,
-      summary: summary || null
+      summary: summary || null,
+      plan_id: row.plan_id,
+      plan_step_order: row.plan_step_order,
     });
 
     return ok(res, row);

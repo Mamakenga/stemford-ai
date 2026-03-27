@@ -117,7 +117,7 @@ function inferRouting(title) {
 }
 
 const helpText =
-  "Команды:\n/help\n/status\n/task <текст задачи>\n/yes (подтвердить черновик /task)\n/no (отмена черновика /task)\n/tasks [status]\n/approvals\n/approve <approval_id>\n/reject <approval_id> [причина]\n/org\n/goals\n/goal <goal_id>\n/run <task_id>\n/done <task_id>\n/block <task_id> <причина>\n/fail <task_id> <причина>\n/reopen <task_id>";
+  "Команды:\n/help\n/status\n/task <текст задачи>\n/yes (подтвердить черновик /task)\n/no (отмена черновика /task)\n/tasks [status]\n/approvals\n/approve <approval_id>\n/reject <approval_id> [причина]\n/org\n/goals\n/goal <goal_id>\n/gate_start <task_id> [причина]\n/run <task_id>\n/gate_end <task_id> [причина]\n/done <task_id>\n/block <task_id> <причина>\n/fail <task_id> <причина>\n/reopen <task_id>";
 
 bot.on("message", async (msg) => {
   if (!isAllowedMessage(msg)) return;
@@ -479,6 +479,42 @@ bot.onText(/^\/goal\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
   }
 });
 
+bot.onText(/^\/gate_start\s+([A-Za-z0-9_-]+)(?:\s+(.+))?$/, async (msg, m) => {
+  if (!isAllowedMessage(msg)) return;
+  const taskId = m && m[1] ? m[1].trim() : "";
+  const reason = m && m[2] ? m[2].trim() : "start gate requested from telegram";
+  if (!taskId) return bot.sendMessage(msg.chat.id, "Формат: /gate_start <task_id> [причина]");
+
+  try {
+    const resp = await fetch(
+      "http://127.0.0.1:3210/tasks/" + encodeURIComponent(taskId) + "/gates/start/request",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requested_by_role: "human_telegram",
+          reason,
+        }),
+      }
+    );
+
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok || !data || !data.ok) {
+      const msgText = data && data.error && data.error.message ? data.error.message : "HTTP " + resp.status;
+      return bot.sendMessage(msg.chat.id, "Start gate error: " + msgText);
+    }
+
+    await bot.sendMessage(
+      msg.chat.id,
+      "Start gate pending: " + taskId +
+      "\napproval_id: " + data.data.approval_id +
+      "\napprover_role: " + data.data.approver_role
+    );
+  } catch (e) {
+    await bot.sendMessage(msg.chat.id, "Start gate error: " + e.message);
+  }
+});
+
 
 bot.onText(/^\/run\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
   if (!isAllowedMessage(msg)) return;
@@ -505,6 +541,42 @@ bot.onText(/^\/run\s+([A-Za-z0-9_-]+)$/, async (msg, m) => {
     await bot.sendMessage(msg.chat.id, "Task started: " + taskId + " (assignee: " + assignee + ")");
   } catch (e) {
     await bot.sendMessage(msg.chat.id, "Run error: " + e.message);
+  }
+});
+
+bot.onText(/^\/gate_end\s+([A-Za-z0-9_-]+)(?:\s+(.+))?$/, async (msg, m) => {
+  if (!isAllowedMessage(msg)) return;
+  const taskId = m && m[1] ? m[1].trim() : "";
+  const reason = m && m[2] ? m[2].trim() : "end gate requested from telegram";
+  if (!taskId) return bot.sendMessage(msg.chat.id, "Формат: /gate_end <task_id> [причина]");
+
+  try {
+    const resp = await fetch(
+      "http://127.0.0.1:3210/tasks/" + encodeURIComponent(taskId) + "/gates/end/request",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requested_by_role: "human_telegram",
+          reason,
+        }),
+      }
+    );
+
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok || !data || !data.ok) {
+      const msgText = data && data.error && data.error.message ? data.error.message : "HTTP " + resp.status;
+      return bot.sendMessage(msg.chat.id, "End gate error: " + msgText);
+    }
+
+    await bot.sendMessage(
+      msg.chat.id,
+      "End gate pending: " + taskId +
+      "\napproval_id: " + data.data.approval_id +
+      "\napprover_role: " + data.data.approver_role
+    );
+  } catch (e) {
+    await bot.sendMessage(msg.chat.id, "End gate error: " + e.message);
   }
 });
 
