@@ -920,3 +920,35 @@ Checks (update):
 - Manual UX check of the create-task script confirms the visible prompts are now human-readable and reduced to the minimum viable flow.
 Open risks (update):
 - Goal and assignee are still stored as internal ids under the hood; the next UX pass should replace defaults/prompts with an inline composer and visible human labels everywhere.
+
+---
+
+## H-2026-03-28-04
+Role: Codex=Executor
+Scope: Explicit anti-drift plan lock (Coder Factory first, Business Control Plane second)
+Commits: pending
+Changes:
+- Updated canonical plan files to explicitly fix product order:
+  - first: `Coder Factory` / software factory with `executor / reviewer / deployer`
+  - second: `Business Control Plane` for Stemford, built by coder factory
+  - third: reusable platform/service for other businesses
+- Added anti-drift wording so current kanban/dashboard work is interpreted as coder-pipeline UX first, not as a generic business task board.
+- Clarified in roadmap that Task Board MVP is initially for coder tasks and role visibility on the card/timeline is mandatory.
+Files:
+- `plans/PLAN_OpenClaw_Control_Plane.md`
+- `plans/ROADMAP_OpenClaw_Front_CICD_Back.md`
+- `plans/PLAN_Implementation_Reliability_Kanban.md`
+Checks:
+- Manual verification by `Select-String` on all three plan files confirms explicit presence of:
+  - `Coder Factory`
+  - `Business Dashboard`
+  - anti-drift phrasing
+  - `executor / reviewer / deployer`
+Open risks:
+- Dashboard UX still needs a concrete refactor from generic task board toward coder-factory board.
+- Current deployed web UI still reflects the pre-lock interpretation until the next implementation step.
+Review ask:
+- Validate that the plan hierarchy is now unambiguous enough to stop future drift in product direction.
+Verdict: pending
+P1 items: pending
+P2 items: pending
