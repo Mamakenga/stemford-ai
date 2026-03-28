@@ -111,6 +111,23 @@ function parseIsoDatetime(raw) {
   return d;
 }
 
+function normalizeStringArray(raw) {
+  const items = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? raw.split(",")
+      : [];
+  const normalized = [];
+  const seen = new Set();
+  for (const item of items) {
+    const value = String(item || "").trim().toLowerCase();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    normalized.push(value);
+  }
+  return normalized;
+}
+
 function escapeLikePattern(raw) {
   return String(raw || "").replace(/[\\%_]/g, "\\$&");
 }
@@ -121,11 +138,81 @@ function includesSensitiveMarkers(text) {
 }
 
 function normalizeTaskRowForView(row) {
+  const quality_checks_required = normalizeStringArray(row.quality_checks_required);
+  const quality_checks_passed = normalizeStringArray(row.quality_checks_passed);
   return {
     ...row,
     requires_start_approval: Boolean(row.requires_start_approval),
     requires_end_approval: Boolean(row.requires_end_approval),
+    quality_checks_required,
+    quality_checks_passed,
   };
+}
+
+function buildTaskQualityState(row, extraPassedChecks = []) {
+  const task = normalizeTaskRowForView(row);
+  const required = normalizeStringArray(task.quality_checks_required);
+  const passed = normalizeStringArray([...task.quality_checks_passed, ...extraPassedChecks]);
+  const missing = required.filter((check) => !passed.includes(check));
+  return {
+    required,
+    passed,
+    missing,
+    total_required: required.length,
+    total_passed: passed.length,
+    ok: missing.length === 0,
+  };
+}
+
+const TASK_ACTION_RULES = {
+  claim: {
+    from: ["todo", "blocked"],
+    to: "in_progress",
+    failureCode: "not_claimable",
+  },
+  complete: {
+    from: ["in_progress", "blocked", "todo"],
+    to: "done",
+    failureCode: "not_completable",
+  },
+  block: {
+    from: ["todo", "in_progress"],
+    to: "blocked",
+    failureCode: "invalid_transition_or_not_found",
+  },
+  fail: {
+    from: ["todo", "in_progress", "blocked"],
+    to: "failed",
+    failureCode: "invalid_transition_or_not_found",
+  },
+  reopen: {
+    from: ["done", "failed", "blocked"],
+    to: "todo",
+    failureCode: "invalid_transition_or_not_found",
+  },
+  retry: {
+    from: ["failed", "blocked"],
+    to: "todo",
+    failureCode: "invalid_transition_or_not_found",
+  },
+};
+
+function getTaskActionRule(action) {
+  return TASK_ACTION_RULES[action] || null;
+}
+
+function isTaskActionAllowed(action, status) {
+  const rule = getTaskActionRule(action);
+  if (!rule) return false;
+  return rule.from.includes(String(status || "").trim());
+}
+
+function buildTaskStatusSqlList(action) {
+  const rule = getTaskActionRule(action);
+  if (!rule) {
+    throw new Error(`unknown task action rule: ${action}`);
+  }
+  return rule.from.map((status) => `'${status}'`).join(",");
 }
 
 function computeKanbanColumn(row) {
@@ -428,6 +515,7 @@ app.get("/tasks", async (req, res) => {
     select id,title,primary_goal_id,status,assignee,due_at,retry_attempt,retry_after,
            plan_id,plan_step_order,
            requires_start_approval,requires_end_approval,
+           quality_checks_required,quality_checks_passed,
            start_gate_approval_id,start_gate_status,
            end_gate_approval_id,end_gate_status,
            claimed_by,claimed_at,completed_at,status_reason
@@ -444,7 +532,13 @@ app.get("/tasks", async (req, res) => {
 
   try {
     const q = await pool.query(sql, vals);
-    const tasks = q.rows.map(normalizeTaskRowForView);
+    const tasks = q.rows.map((row) => {
+      const task = normalizeTaskRowForView(row);
+      return {
+        ...task,
+        quality: buildTaskQualityState(task),
+      };
+    });
     if (String(view || "").trim().toLowerCase() === "kanban") {
       return ok(res, { view: "kanban", count: tasks.length, columns: buildKanbanColumns(tasks) });
     }
@@ -453,7 +547,7 @@ app.get("/tasks", async (req, res) => {
     const msg = String(e?.message || "");
     const missingExtendedColumn =
       e?.code === "42703" &&
-      /retry_attempt|retry_after|plan_id|plan_step_order|requires_start_approval|requires_end_approval|start_gate_approval_id|start_gate_status|end_gate_approval_id|end_gate_status|claimed_by|claimed_at|completed_at|status_reason/i.test(msg);
+      /retry_attempt|retry_after|plan_id|plan_step_order|requires_start_approval|requires_end_approval|quality_checks_required|quality_checks_passed|start_gate_approval_id|start_gate_status|end_gate_approval_id|end_gate_status|claimed_by|claimed_at|completed_at|status_reason/i.test(msg);
     if (missingExtendedColumn) {
       try {
         const qLegacy = await pool.query(legacySql, vals);
@@ -465,15 +559,26 @@ app.get("/tasks", async (req, res) => {
           plan_step_order: null,
           requires_start_approval: false,
           requires_end_approval: false,
+          quality_checks_required: [],
+          quality_checks_passed: [],
           start_gate_approval_id: null,
           start_gate_status: null,
           end_gate_approval_id: null,
           end_gate_status: null,
         }));
         if (String(view || "").trim().toLowerCase() === "kanban") {
-          return ok(res, { view: "kanban", count: tasks.length, columns: buildKanbanColumns(tasks) });
+          return ok(res, { view: "kanban", count: tasks.length, columns: buildKanbanColumns(tasks.map((row) => ({
+            ...normalizeTaskRowForView(row),
+            quality: buildTaskQualityState(row),
+          }))) });
         }
-        return ok(res, { count: qLegacy.rowCount, tasks: tasks.map(normalizeTaskRowForView) });
+        return ok(res, {
+          count: qLegacy.rowCount,
+          tasks: tasks.map((row) => {
+            const task = normalizeTaskRowForView(row);
+            return { ...task, quality: buildTaskQualityState(task) };
+          }),
+        });
       } catch (legacyErr) {
         return fail(res, 500, "tasks_query_failed", legacyErr.message);
       }
@@ -491,6 +596,7 @@ app.get("/tasks/:id", async (req, res) => {
       `select id,title,primary_goal_id,status,assignee,due_at,retry_attempt,retry_after,
               plan_id,plan_step_order,
               requires_start_approval,requires_end_approval,
+              quality_checks_required,quality_checks_passed,
               start_gate_approval_id,start_gate_status,
               end_gate_approval_id,end_gate_status,
               claimed_by,claimed_at,completed_at,status_reason
@@ -499,12 +605,16 @@ app.get("/tasks/:id", async (req, res) => {
       [taskId]
     );
     if (q.rowCount === 0) return fail(res, 404, "not_found", "task not found");
-    return ok(res, normalizeTaskRowForView(q.rows[0]));
+    const task = normalizeTaskRowForView(q.rows[0]);
+    return ok(res, {
+      ...task,
+      quality: buildTaskQualityState(task),
+    });
   } catch (e) {
     const msg = String(e?.message || "");
     const missingExtendedColumn =
       e?.code === "42703" &&
-      /retry_attempt|retry_after|plan_id|plan_step_order|requires_start_approval|requires_end_approval|start_gate_approval_id|start_gate_status|end_gate_approval_id|end_gate_status|claimed_by|claimed_at|completed_at|status_reason/i.test(msg);
+      /retry_attempt|retry_after|plan_id|plan_step_order|requires_start_approval|requires_end_approval|quality_checks_required|quality_checks_passed|start_gate_approval_id|start_gate_status|end_gate_approval_id|end_gate_status|claimed_by|claimed_at|completed_at|status_reason/i.test(msg);
     if (!missingExtendedColumn) return fail(res, 500, "task_query_failed", e.message);
 
     try {
@@ -515,7 +625,7 @@ app.get("/tasks/:id", async (req, res) => {
         [taskId]
       );
       if (qLegacy.rowCount === 0) return fail(res, 404, "not_found", "task not found");
-      return ok(res, normalizeTaskRowForView({
+      const task = normalizeTaskRowForView({
         ...qLegacy.rows[0],
         retry_attempt: 0,
         retry_after: null,
@@ -523,11 +633,17 @@ app.get("/tasks/:id", async (req, res) => {
         plan_step_order: null,
         requires_start_approval: false,
         requires_end_approval: false,
+        quality_checks_required: [],
+        quality_checks_passed: [],
         start_gate_approval_id: null,
         start_gate_status: null,
         end_gate_approval_id: null,
         end_gate_status: null,
-      }));
+      });
+      return ok(res, {
+        ...task,
+        quality: buildTaskQualityState(task),
+      });
     } catch (legacyErr) {
       return fail(res, 500, "task_query_failed", legacyErr.message);
     }
@@ -1385,6 +1501,7 @@ app.post("/tasks", async (req, res) => {
     plan_step_order,
     requires_start_approval,
     requires_end_approval,
+    quality_checks_required,
   } = req.body || {};
 
   if (!title || !primary_goal_id || !assignee || !actor_role) {
@@ -1400,6 +1517,9 @@ app.post("/tasks", async (req, res) => {
   }
   const requireStart = parseBoolean(requires_start_approval, false);
   const requireEnd = parseBoolean(requires_end_approval, false);
+  const requiredChecks = normalizeStringArray(
+    quality_checks_required == null ? ["result_summary"] : quality_checks_required
+  );
   {
     const allowed = await requireToolAccess(
       res,
@@ -1417,12 +1537,14 @@ app.post("/tasks", async (req, res) => {
          id,title,primary_goal_id,status,assignee,due_at,
          plan_id,plan_step_order,
          requires_start_approval,requires_end_approval,
+         quality_checks_required,quality_checks_passed,
          start_gate_status,end_gate_status
        )
-       values ($1,$2,$3,'todo',$4,$5,$6,$7,$8,$9,$10,$11)
+       values ($1,$2,$3,'todo',$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13)
        returning id,title,primary_goal_id,status,assignee,due_at,
                  plan_id,plan_step_order,
                  requires_start_approval,requires_end_approval,
+                 quality_checks_required,quality_checks_passed,
                  start_gate_approval_id,start_gate_status,end_gate_approval_id,end_gate_status`,
       [
         taskId,
@@ -1434,6 +1556,8 @@ app.post("/tasks", async (req, res) => {
         effectivePlanStepOrder,
         requireStart,
         requireEnd,
+        JSON.stringify(requiredChecks),
+        JSON.stringify([]),
         requireStart ? "pending" : null,
         requireEnd ? "pending" : null,
       ]
@@ -1448,6 +1572,7 @@ app.post("/tasks", async (req, res) => {
       plan_step_order: row.plan_step_order,
       requires_start_approval: row.requires_start_approval,
       requires_end_approval: row.requires_end_approval,
+      quality_checks_required: row.quality_checks_required,
     });
 
     return ok(res, row);
@@ -1606,6 +1731,63 @@ app.post("/tasks/:id/gates/end/request", async (req, res) => {
   }
 });
 
+app.post("/tasks/:id/quality-checks", async (req, res) => {
+  const taskId = String(req.params.id || "").trim();
+  const actor_role = String(req.body?.actor_role || "").trim();
+  const mode = String(req.body?.mode || "merge").trim().toLowerCase();
+  const passed_checks = normalizeStringArray(req.body?.passed_checks);
+
+  if (!taskId || !actor_role) {
+    return fail(res, 400, "validation_error", "task id and actor_role are required");
+  }
+  if (!["merge", "replace"].includes(mode)) {
+    return fail(res, 400, "validation_error", "mode must be merge or replace");
+  }
+
+  const allowed = await requireToolAccess(
+    res,
+    actor_role,
+    "tasks.write",
+    { entity_type: "task", entity_id: taskId }
+  );
+  if (!allowed) return;
+
+  try {
+    const current = await pool.query(
+      `select id,title,status,quality_checks_required,quality_checks_passed
+       from tasks
+       where id = $1`,
+      [taskId]
+    );
+    if (current.rowCount === 0) return fail(res, 404, "not_found", "task not found");
+
+    const row = normalizeTaskRowForView(current.rows[0]);
+    const nextPassed = mode === "replace"
+      ? passed_checks
+      : normalizeStringArray([...row.quality_checks_passed, ...passed_checks]);
+
+    const q = await pool.query(
+      `update tasks
+       set quality_checks_passed = $2::jsonb
+       where id = $1
+       returning id,title,status,quality_checks_required,quality_checks_passed`,
+      [taskId, JSON.stringify(nextPassed)]
+    );
+
+    const updated = normalizeTaskRowForView(q.rows[0]);
+    const quality = buildTaskQualityState(updated);
+    await writeAction("task_quality_checks_updated", "task", updated.id, actor_role, {
+      mode,
+      passed_checks: updated.quality_checks_passed,
+      missing_checks: quality.missing,
+    });
+
+    return ok(res, { ...updated, quality });
+  } catch (e) {
+    return fail(res, 500, "task_quality_checks_update_failed", e.message);
+  }
+});
+
 app.post("/tasks/:id/claim", async (req, res) => {
   const taskId = req.params.id;
   const actor_role = String(req.body?.actor_role || "").trim();
@@ -1702,7 +1884,7 @@ app.post("/tasks/:id/claim", async (req, res) => {
           claimed_by = $2,
           claimed_at = now()
       WHERE id = $1
-        AND status IN ('todo','blocked')
+        AND status IN (${buildTaskStatusSqlList("claim")})
         AND (retry_after IS NULL OR retry_after <= now())
       RETURNING id,title,status,assignee,claimed_by,claimed_at,primary_goal_id,retry_after,
                 plan_id,plan_step_order,
@@ -1723,7 +1905,7 @@ app.post("/tasks/:id/claim", async (req, res) => {
 
       if (current.rowCount > 0) {
         const row = current.rows[0];
-        if (["todo", "blocked"].includes(row.status) && row.retry_locked) {
+        if (isTaskActionAllowed("claim", row.status) && row.retry_locked) {
           return fail(
             res,
             409,
@@ -1733,7 +1915,7 @@ app.post("/tasks/:id/claim", async (req, res) => {
         }
       }
 
-      return fail(res, 409, "not_claimable", "task is not in todo/blocked or does not exist");
+      return fail(res, 409, getTaskActionRule("claim").failureCode, "task is not in todo/blocked or does not exist");
     }
 
     const row = normalizeTaskRowForView(q.rows[0]);
@@ -1772,7 +1954,8 @@ app.post("/tasks/:id/complete", async (req, res) => {
 
   try {
     const taskStateQ = await pool.query(
-      `select id,status,requires_end_approval,end_gate_status,end_gate_approval_id,plan_id,plan_step_order
+      `select id,status,requires_end_approval,end_gate_status,end_gate_approval_id,plan_id,plan_step_order,
+              quality_checks_required,quality_checks_passed
        from tasks
        where id = $1`,
       [taskId]
@@ -1808,24 +1991,45 @@ app.post("/tasks/:id/complete", async (req, res) => {
       });
     }
 
+    const extraPassedChecks = summary ? ["result_summary"] : [];
+    const quality = buildTaskQualityState(taskState, extraPassedChecks);
+    if (!quality.ok) {
+      return res.status(409).json({
+        ok: false,
+        error: {
+          code: "quality_gate_failed",
+          message: "task cannot be completed before required quality checks are passed",
+          details: {
+            task_id: taskId,
+            required_checks: quality.required,
+            passed_checks: quality.passed,
+            missing_checks: quality.missing,
+          },
+        },
+        meta: { schema_version: "v1", ts: new Date().toISOString() },
+      });
+    }
+
     const q = await pool.query(
       `
       UPDATE tasks
       SET status = 'done',
           completed_at = now(),
-          status_reason = NULL
+          status_reason = NULL,
+          quality_checks_passed = $2::jsonb
       WHERE id = $1
-        AND status IN ('in_progress','blocked','todo')
+        AND status IN (${buildTaskStatusSqlList("complete")})
       RETURNING id,title,status,assignee,claimed_by,claimed_at,completed_at,primary_goal_id,
                 plan_id,plan_step_order,
                 requires_start_approval,requires_end_approval,
+                quality_checks_required,quality_checks_passed,
                 start_gate_approval_id,start_gate_status,end_gate_approval_id,end_gate_status
       `,
-      [taskId]
+      [taskId, JSON.stringify(quality.passed)]
     );
 
     if (q.rowCount === 0) {
-      return fail(res, 409, "not_completable", "task is not in progress/blocked/todo or does not exist");
+      return fail(res, 409, getTaskActionRule("complete").failureCode, "task is not in progress/blocked/todo or does not exist");
     }
 
     const row = normalizeTaskRowForView(q.rows[0]);
@@ -1833,6 +2037,7 @@ app.post("/tasks/:id/complete", async (req, res) => {
       completed_at: row.completed_at,
       goal_id: row.primary_goal_id,
       summary: summary || null,
+      quality_checks_passed: row.quality_checks_passed,
       plan_id: row.plan_id,
       plan_step_order: row.plan_step_order,
     });
@@ -1864,12 +2069,17 @@ app.post("/tasks/:id/block", async (req, res) => {
          set status='blocked',
              status_reason=$2
        where id=$1
-         and status in ('todo','in_progress')
+         and status in (${buildTaskStatusSqlList("block")})
        returning id,title,status,assignee,primary_goal_id,status_reason`,
       [taskId, reason || null]
     );
     if (q.rowCount === 0) {
-      return fail(res, 409, "invalid_transition_or_not_found", "task not found or status transition is not allowed");
+      return fail(
+        res,
+        409,
+        getTaskActionRule("block").failureCode,
+        "task not found or status transition is not allowed"
+      );
     }
     const row = q.rows[0];
     await writeAction("task_blocked", "task", row.id, actor_role, { reason: row.status_reason });
@@ -1900,12 +2110,17 @@ app.post("/tasks/:id/fail", async (req, res) => {
          set status='failed',
              status_reason=$2
        where id=$1
-         and status in ('todo','in_progress','blocked')
+         and status in (${buildTaskStatusSqlList("fail")})
        returning id,title,status,assignee,primary_goal_id,status_reason`,
       [taskId, reason || null]
     );
     if (q.rowCount === 0) {
-      return fail(res, 409, "invalid_transition_or_not_found", "task not found or status transition is not allowed");
+      return fail(
+        res,
+        409,
+        getTaskActionRule("fail").failureCode,
+        "task not found or status transition is not allowed"
+      );
     }
     const row = q.rows[0];
     await writeAction("task_failed", "task", row.id, actor_role, { reason: row.status_reason });
@@ -1937,13 +2152,18 @@ app.post("/tasks/:id/reopen", async (req, res) => {
          set status='todo',
              status_reason=NULL
        where id=$1
-         and status in ('done','failed','blocked')
+         and status in (${buildTaskStatusSqlList("reopen")})
        returning id,title,status,assignee,primary_goal_id,status_reason`,
       [taskId]
     );
 
     if (q.rowCount === 0) {
-      return fail(res, 409, "invalid_transition_or_not_found", "task not found or status transition is not allowed");
+      return fail(
+        res,
+        409,
+        getTaskActionRule("reopen").failureCode,
+        "task not found or status transition is not allowed"
+      );
     }
 
     const row = q.rows[0];
@@ -1995,8 +2215,13 @@ app.post("/tasks/:id/retry", async (req, res) => {
     }
 
     const before = current.rows[0];
-    if (!["failed", "blocked"].includes(before.status)) {
-      return fail(res, 409, "invalid_transition_or_not_found", "task not found or retry transition is not allowed");
+    if (!isTaskActionAllowed("retry", before.status)) {
+      return fail(
+        res,
+        409,
+        getTaskActionRule("retry").failureCode,
+        "task not found or retry transition is not allowed"
+      );
     }
     if (Number(before.retry_attempt) >= MAX_RETRY_ATTEMPTS) {
       await writeAction("retry_limit_exceeded", "task", before.id, actor_role, {
@@ -2023,7 +2248,7 @@ app.post("/tasks/:id/retry", async (req, res) => {
              claimed_at=NULL,
              completed_at=NULL
        where id=$1
-         and status in ('failed','blocked')
+         and status in (${buildTaskStatusSqlList("retry")})
          and coalesce(retry_attempt,0) < $4
        returning id,title,status,assignee,primary_goal_id,status_reason,retry_attempt,retry_after,claimed_by,claimed_at,completed_at`,
       [taskId, reason, retryAfter, MAX_RETRY_ATTEMPTS]

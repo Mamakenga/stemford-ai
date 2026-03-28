@@ -267,6 +267,7 @@
         card.plan_id ? `plan: ${card.plan_id} / #${card.plan_step_order || "?"}` : "",
         `start gate: ${card.start_gate_status || "-"}`,
         `end gate: ${card.end_gate_status || "-"}`,
+        `checks: ${card.quality && card.quality.total_required ? `${card.quality.total_passed}/${card.quality.total_required}` : "0/0"}`,
       ].filter(Boolean).join("\n");
 
       wrap.innerHTML = `
@@ -287,6 +288,18 @@
       addBtn("Open", async () => {
         const t = await apiGet(`/tasks/${encodeURIComponent(card.id)}`);
         alert(JSON.stringify(t, null, 2));
+      });
+
+      addBtn("Checks", async () => {
+        const current = (card.quality_checks_passed || []).join(", ");
+        const next = prompt("Passed checks (comma-separated):", current);
+        if (next === null) return;
+        await apiPost(`/tasks/${encodeURIComponent(card.id)}/quality-checks`, {
+          actor_role: actorRole(),
+          mode: "replace",
+          passed_checks: next,
+        });
+        await refreshAll();
       });
 
       addBtn("Start Gate", async () => {
@@ -453,6 +466,7 @@
         const stepOrderRaw = prompt("Plan step order (optional number):", "") || "";
         const requiresStart = confirm("Require START approval?");
         const requiresEnd = confirm("Require END approval?");
+        const qualityChecksRaw = prompt("Quality checks (comma-separated):", "result_summary") || "result_summary";
         await apiPost("/tasks", {
           title,
           primary_goal_id: goal,
@@ -462,6 +476,7 @@
           plan_step_order: stepOrderRaw ? Number(stepOrderRaw) : null,
           requires_start_approval: requiresStart,
           requires_end_approval: requiresEnd,
+          quality_checks_required: qualityChecksRaw,
         });
         await refreshAll();
       } catch (e) {

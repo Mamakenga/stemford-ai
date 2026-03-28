@@ -787,3 +787,45 @@ P2 items: pending
   - `grep -n 'LOG_DIR\|mkdir -p "$LOG_DIR"' /opt/stemford/run/cicd/run_with_rotation.sh` shows guard in place.
   - `bash -n /opt/stemford/run/cicd/run_with_rotation.sh` → OK.
 - Verdict: P1=0, P2=0.
+
+---
+
+## H-2026-03-28-01
+Role: Codex=Executor
+Scope: Reliability-first execution baseline: task state machine canon + unified transition rules + quality gate MVP + dashboard visibility
+Commits: pending
+Changes:
+- Added canonical task lifecycle doc:
+  - `docs/TASK_STATE_MACHINE.md`
+  - fixed actual Kanban mapping for `todo` with pending/rejected start gate -> `Backlog`
+- Added executable implementation plan and wired it into project navigation:
+  - `plans/PLAN_Implementation_Reliability_Kanban.md`
+  - updated `plans/PLAN_OpenClaw_Control_Plane.md`
+  - updated `plans/ROADMAP_OpenClaw_Front_CICD_Back.md`
+  - updated `START_HERE.md`
+- Refactored task transition rules in `app/control-api/server.js`:
+  - centralized action rules for `claim/complete/block/fail/reopen/retry`
+  - replaced scattered status lists with shared helpers
+- Added quality gate MVP:
+  - migration `app/control-api/migrations/012_task_quality_checks.sql`
+  - task fields `quality_checks_required` / `quality_checks_passed`
+  - new endpoint `POST /tasks/:id/quality-checks`
+  - `POST /tasks/:id/complete` now blocks with `quality_gate_failed` if required checks are missing
+  - `result_summary` auto-passes when non-empty completion summary is provided
+- Updated dashboard:
+  - task card shows checks progress
+  - added `Checks` action
+  - create-task flow accepts required quality checks
+Checks:
+- `node --check app/control-api/server.js` passed after refactor and quality-gate changes.
+- Static diff review completed for migration/API/dashboard/doc alignment.
+Open risks:
+- Not yet deployed to VPS; runtime behavior there still reflects previous version.
+- No VPS smoke yet for migration `012_task_quality_checks.sql`.
+- Dashboard currently exposes checks as a simple prompt-based control, not final UX.
+Review ask:
+- Validate that the quality gate contract is minimal but sufficient for MVP.
+- Focus on P1 risks around completion flow and compatibility with existing tasks.
+Verdict: pending
+P1 items: pending
+P2 items: pending

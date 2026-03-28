@@ -1,6 +1,6 @@
 ﻿# ROADMAP: OpenClaw-front + CI/CD-back
 
-Version: 1.0
+Version: 1.1
 Status: Active
 Owner: Stemford engineering
 
@@ -105,6 +105,17 @@ DoD:
 1. Event-driven очередь и lifecycle run.
 2. Watchdog/self-heal на уровне сервисов.
 3. Плагинный слой только с allowlist.
+
+## 4.1) Детальный план внедрения (исполняемый)
+
+Детальный пошаговый план исполнения вынесен в:
+1. `plans/PLAN_Implementation_Reliability_Kanban.md`
+
+Связка roadmap -> execution:
+1. E0-E1 = Фазы A-B (state machine + gate + quality checklist).
+2. E2 = Фазы C-D (review discipline + task isolation).
+3. E3-E4 = Фаза E (web-пульт и управляемый multi-agent процесс).
+4. E5 = Фаза F (операционная надежность и эксплуатация).
 
 ## 5) Формальные критерии SUCCESS
 
@@ -217,3 +228,21 @@ High-risk включает:
 2. Docker-in-Docker с docker.sock
 3. Full GraphRAG memory stack для кодерского контура
 4. Полностью автономный self-modifying loop без human gate
+
+## 11) Статус внедрения (срез на 2026-03-28)
+
+Готово:
+1. Базовый Control API в рабочем контуре.
+2. `GET /health/summary`.
+3. Kanban API: `GET /tasks?view=kanban`.
+4. Web dashboard endpoint: `/dashboard`.
+5. Gate-команды в Telegram: `/gate_start` и `/gate_end`.
+6. Миграция `011_task_step_gates_and_chat.sql` (task gates + chat table).
+
+В работе:
+1. Доведение quality checklist до обязательного hard-gate перед `Done`.
+2. Полная дисциплина review P1/P2 на уровне серверных ограничений.
+3. Расширение dashboard до «операционного пульта» (таймлайн, ревью, быстрые действия).
+
+Следующий фокус:
+1. Завершить Фазы A-B из `PLAN_Implementation_Reliability_Kanban.md`.

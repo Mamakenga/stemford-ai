@@ -2,6 +2,7 @@
 
 ## Quick Ops Link
 - Tech inspection protocol (must-read before real tasks): docs/TECH_INSPECTION_PROTOCOL.md
+- Task state machine (canonical transitions): docs/TASK_STATE_MACHINE.md
 
 ## Карта проекта за 60 секунд
 1. `START_HERE.md` — правила работы и порядок старта.
@@ -14,6 +15,7 @@
 8. `PAPERCLIP_IMPLEMENTATION_TRACKER.md` + `CHECKLIST_Paperclip_MVP.md` + `OPEN_ISSUES.md` — прогресс, контроль и блокеры.
 9. `CONTEXT_Main.md` + `plans/*` + `refs/*` — бизнес-контекст, планы и справочные материалы.
 10. `plans/ROADMAP_OpenClaw_Front_CICD_Back.md` — дорожная карта целевой системы OpenClaw-front + CI/CD-back с детальной реализацией Kanban Task Board.
+11. `plans/PLAN_Implementation_Reliability_Kanban.md` — исполняемый план внедрения reliability-first контура и веб-пульта Kanban.
 
 Этот файл — универсальная точка входа для **любой** AI-модели в этом проекте.
 
@@ -56,6 +58,7 @@
    - `plans/PLAN_A_Franchise_Exit_Repositioning.md` — исполнимый план этапа A (выход из франшизы + репозиционирование).
    - `plans/PLAN_OpenClaw_Control_Plane.md` — дорожная карта реализации control-plane для "отдела из джарвисов" на базе OpenClaw.
    - `plans/ROADMAP_OpenClaw_Front_CICD_Back.md` — целевая дорожная карта OpenClaw-front + CI/CD-back (включая Kanban Task Board и UX-протокол Start/End).
+   - `plans/PLAN_Implementation_Reliability_Kanban.md` — детальный исполняемый план внедрения (фазы A-F).
    - `CHECKLIST_Paperclip_MVP.md` — контрольный список запуска.
    - `runtime/orchestration/PLAYBOOK_FRANCHISE_EXIT_REPOSITIONING.md` — runbook запуска агентного контура для этапа A.
    - `docs for human/Как запустить комплекс Репозиционирование (A).md` — краткая human-инструкция по запуску.
