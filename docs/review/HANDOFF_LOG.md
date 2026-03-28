@@ -1,4 +1,4 @@
-﻿# HANDOFF LOG
+# HANDOFF LOG
 
 Single source of truth for every Executor/Reviewer cycle.
 
@@ -1019,3 +1019,21 @@ Review ask:
 Verdict: pending
 P1 items: pending
 P2 items: pending
+## H-2026-03-28-06
+
+### Changes
+1. Rewrote `START_HERE.md` from scratch to point only to real, current files in the repository.
+2. Switched `AGENTS.md` T1 context router from `PAPERCLIP_FRAMEWORK_MASTER.md` to `plans/README.md`.
+3. Removed Paperclip as active navigation canon from agent SOUL files and replaced it with `plans/README.md` / `control-plane` wording where those files described live operating context.
+
+### Checks
+1. Verified current repo file map with `rg --files` before rewriting navigation.
+2. Re-ran `rg` against `START_HERE.md`, `AGENTS.md`, and `agents/*/SOUL.md` to confirm dead Paperclip file references were removed from active navigation.
+3. Confirmed working code drafts in `app/control-api/server.js` and `app/control-api/public/coder_factory.html` were left untouched.
+
+### Open risks
+1. Historical/comparative mentions of Paperclip still remain inside archive or analysis plans by design.
+2. Some legacy agent SOUL files still have broader old-framework assumptions beyond the removed navigation references; that is a separate cleanup pass.
+
+### Review ask
+1. Reviewer focus: confirm that active-start navigation is now conflict-free and no live route points to non-existent Paperclip files.

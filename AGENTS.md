@@ -4,7 +4,7 @@ This file is a minimal router for AI tooling.
 
 Start context levels:
 1. `T0` (mandatory): read `START_HERE.md` (primary collaboration contract).
-2. `T1` (on trigger): read `PAPERCLIP_FRAMEWORK_MASTER.md` only when task needs file-role navigation, structure status, or placement of a new artifact.
+2. `T1` (on trigger): read `plans/README.md` only when task needs file-role navigation, structure status, or placement of a new artifact.
 3. `T2` (task-specific): open profile files from `START_HERE.md` rails only when needed for the current step.
 
 Rule:

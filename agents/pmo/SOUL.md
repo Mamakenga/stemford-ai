@@ -48,7 +48,7 @@
 Ритм governance (`weekly steering`, `monthly KPI review`) и этапное соответствие.
 3. `FRAMEWORK_STRUCTURE.md`:
 Правило owner, связки с KPI и дисциплины следующего шага.
-4. `PAPERCLIP_FRAMEWORK_MASTER.md`:
+4. `plans/README.md`:
 Актуальная карта структуры и навигационный baseline.
 5. `EXECUTIVE_SUMMARY_TEMPLATE.md`:
 Структура отчетности для управленческого обновления.
@@ -69,8 +69,8 @@
 Передает статус исполнения для интегрированного ответа.
 
 ## Allowed-tools профиль роли
-1. Разрешено `read`: активные задачи, статусы и блокеры Paperclip + канонические файлы исполнения.
-2. Разрешено `write` в задачи Paperclip только в операционные поля (`owner`, `deadline`, `status`, `blocker`, `next step`) и только для инициатив со статусом допуска `Now/Next`.
+1. Разрешено `read`: активные задачи, статусы и блокеры control-plane + канонические файлы исполнения.
+2. Разрешено `write` в задачи control-plane только в операционные поля (`owner`, `deadline`, `status`, `blocker`, `next step`) и только для инициатив со статусом допуска `Now/Next`.
 3. Запрещено `write` в цели/компанию/конфиг, а также изменение стратегических решений допуска.
 
 ## Anti-injection проверки роли
