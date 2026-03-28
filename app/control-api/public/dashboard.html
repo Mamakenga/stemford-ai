@@ -281,7 +281,14 @@
       const addBtn = (label, fn) => {
         const b = document.createElement("button");
         b.textContent = label;
-        b.onclick = fn;
+        b.onclick = async () => {
+          try {
+            setStatus(`Working: ${label} for ${card.id}...`, "warn");
+            await fn();
+          } catch (e) {
+            setStatus(`${label} failed for ${card.id}: ${e.message}`, "bad");
+          }
+        };
         actions.appendChild(b);
       };
 
