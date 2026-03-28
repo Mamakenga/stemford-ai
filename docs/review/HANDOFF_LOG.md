@@ -1251,3 +1251,34 @@ P2 items: pending
 ### Review ask
 1. P1 focus: confirm the revised readiness wording no longer implies completed role orchestration.
 2. P1 focus: confirm the new verification clause is specific enough to make section `7.4` testable.
+
+## H-2026-03-28-15
+
+### Changes
+1. Added `015_agent_run_contract.sql` to persist a formal `run_contract` on `agent_runs`.
+2. Added server-side normalization for `role run contract` in `app/control-api/server.js`.
+3. Defined a strict run-contract shape with:
+   - `role`
+   - `task_id`
+   - `stage_id`
+   - `input_context`
+   - `allowed_tools`
+   - `required_output_format`
+   - `timeout_budget_sec`
+   - `fallback_policy`
+4. Updated `/runtime/trigger` so a run can auto-enrich itself from task context when a `task_id` is provided.
+5. Updated retry/start/complete/list runtime endpoints so `run_contract` survives the whole run lifecycle.
+6. Added `GET /runtime/runs/:id` and list filters by `task_id` / `stage_id` for inspection.
+
+### Checks
+1. `node --check app/control-api/server.js` passes after the runtime-contract changes.
+2. Manual diff review confirms actual role runs now have a first-class contract instead of relying only on generic `payload`.
+
+### Open risks
+1. The factory still does not create role runs automatically from owner actions; that bridge is the next layer.
+2. `run_contract` currently enriches from task context when available, but it does not yet validate that every runtime call must be task-scoped.
+3. Migration has not yet been applied on VPS in this pass.
+
+### Review ask
+1. P1 focus: confirm the `run_contract` shape is strict enough for the first executor/reviewer/deployer wiring step.
+2. P1 focus: confirm the task-context enrichment in `/runtime/trigger` is additive and does not hide important caller intent.

@@ -208,6 +208,163 @@ function normalizeTaskContract(raw, fallback = {}) {
   };
 }
 
+function buildDefaultAllowedToolsForRole(role) {
+  switch (String(role || "").trim().toLowerCase()) {
+    case "executor":
+      return ["repo.read", "repo.write", "checks.run"];
+    case "reviewer":
+      return ["repo.read", "review.write", "checks.read"];
+    case "deployer":
+      return ["deploy.run", "smoke.run", "logs.read"];
+    case "orchestrator":
+    default:
+      return ["tasks.read", "tasks.write", "chat.write", "approvals.request"];
+  }
+}
+
+function buildDefaultOutputFormatForRole(role) {
+  switch (String(role || "").trim().toLowerCase()) {
+    case "executor":
+      return {
+        format_id: "executor_summary_v1",
+        required_fields: ["summary", "artifacts", "checks"],
+      };
+    case "reviewer":
+      return {
+        format_id: "reviewer_verdict_v1",
+        required_fields: ["verdict", "p1", "p2", "acceptance_summary"],
+      };
+    case "deployer":
+      return {
+        format_id: "deployer_report_v1",
+        required_fields: ["deploy_status", "smoke_status", "summary"],
+      };
+    case "orchestrator":
+    default:
+      return {
+        format_id: "orchestrator_stage_packet_v1",
+        required_fields: ["summary", "next_action", "owner_message"],
+      };
+  }
+}
+
+function buildDefaultFallbackPolicyForRole(role) {
+  return {
+    mode: "role_chain",
+    role: String(role || "").trim().toLowerCase() || "orchestrator",
+    max_attempts: MAX_RUN_ATTEMPTS,
+    cooldown_on: [
+      "quota_exhausted",
+      "auth_failure",
+      "timeout",
+      "model_unavailable",
+      "repeated_low_quality_failure",
+    ],
+  };
+}
+
+function buildStageIdForTask(task, explicitStageId = null) {
+  const stageId = String(explicitStageId || "").trim();
+  if (stageId) return stageId;
+  if (task?.plan_id && task?.plan_step_order) {
+    return `${task.plan_id}:step:${task.plan_step_order}`;
+  }
+  if (task?.id) return `${task.id}:main`;
+  return "legacy:unassigned";
+}
+
+function normalizeRoleRunContract(raw, fallback = {}) {
+  const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const role = String(fallback.role || source.role || "").trim().toLowerCase();
+  const inputContextSource =
+    source.input_context && typeof source.input_context === "object" && !Array.isArray(source.input_context)
+      ? source.input_context
+      : {};
+  const fallbackInputContext =
+    fallback.input_context && typeof fallback.input_context === "object" && !Array.isArray(fallback.input_context)
+      ? fallback.input_context
+      : {};
+  const requiredOutputSource =
+    source.required_output_format && typeof source.required_output_format === "object" && !Array.isArray(source.required_output_format)
+      ? source.required_output_format
+      : {};
+  const fallbackRequiredOutput =
+    fallback.required_output_format && typeof fallback.required_output_format === "object" && !Array.isArray(fallback.required_output_format)
+      ? fallback.required_output_format
+      : buildDefaultOutputFormatForRole(role);
+  const fallbackPolicySource =
+    source.fallback_policy && typeof source.fallback_policy === "object" && !Array.isArray(source.fallback_policy)
+      ? source.fallback_policy
+      : {};
+  const fallbackPolicyDefault =
+    fallback.fallback_policy && typeof fallback.fallback_policy === "object" && !Array.isArray(fallback.fallback_policy)
+      ? fallback.fallback_policy
+      : buildDefaultFallbackPolicyForRole(role);
+  const timeoutBudget = parsePositiveInt(
+    source.timeout_budget_sec || fallback.timeout_budget_sec || DEFAULT_RUN_TIMEOUT_SEC,
+    DEFAULT_RUN_TIMEOUT_SEC,
+    3600
+  );
+
+  return {
+    role,
+    task_id: String(source.task_id || fallback.task_id || "").trim() || null,
+    stage_id: String(source.stage_id || fallback.stage_id || "").trim() || "legacy:unassigned",
+    input_context: {
+      ...fallbackInputContext,
+      ...inputContextSource,
+    },
+    allowed_tools: normalizeStringArray(source.allowed_tools || fallback.allowed_tools || buildDefaultAllowedToolsForRole(role)),
+    required_output_format: {
+      format_id: String(requiredOutputSource.format_id || fallbackRequiredOutput.format_id || "generic_v1").trim(),
+      required_fields: normalizeStringArray(
+        requiredOutputSource.required_fields || fallbackRequiredOutput.required_fields || ["summary"]
+      ),
+    },
+    timeout_budget_sec: timeoutBudget,
+    fallback_policy: {
+      ...fallbackPolicyDefault,
+      ...fallbackPolicySource,
+      role,
+      max_attempts: parsePositiveInt(
+        fallbackPolicySource.max_attempts || fallbackPolicyDefault.max_attempts || MAX_RUN_ATTEMPTS,
+        MAX_RUN_ATTEMPTS,
+        20
+      ),
+      cooldown_on: normalizeStringArray(
+        fallbackPolicySource.cooldown_on || fallbackPolicyDefault.cooldown_on || []
+      ),
+    },
+  };
+}
+
+async function loadTaskRuntimeContext(taskId) {
+  if (!taskId) return null;
+  const q = await pool.query(
+    `select id,title,primary_goal_id,status,assignee,due_at,
+            plan_id,plan_step_order,
+            requires_start_approval,requires_end_approval,
+            task_contract,
+            quality_checks_required,quality_checks_passed,
+            start_gate_approval_id,start_gate_status,
+            end_gate_approval_id,end_gate_status,
+            (select count(*)::int from review_findings rf where rf.task_id = tasks.id and rf.status = 'open' and rf.severity = 'p1') as review_open_p1,
+            (select count(*)::int from review_findings rf where rf.task_id = tasks.id and rf.status = 'open' and rf.severity = 'p2') as review_open_p2,
+            (select count(*)::int from review_findings rf where rf.task_id = tasks.id and rf.status = 'resolved') as review_resolved_total
+     from tasks
+     where id = $1
+     limit 1`,
+    [taskId]
+  );
+  if (!q.rowCount) return null;
+  const task = normalizeTaskRowForView(q.rows[0]);
+  return {
+    task,
+    quality: buildTaskQualityState(task),
+    review: buildTaskReviewSummary(task),
+  };
+}
+
 function buildTaskQualityState(row, extraPassedChecks = []) {
   const task = normalizeTaskRowForView(row);
   const required = normalizeStringArray(task.quality_checks_required);
@@ -2536,6 +2693,7 @@ app.post("/runtime/trigger", async (req, res) => {
   const actor_role = String(req.body?.actor_role || "orchestrator").trim();
   const correlation_id = req.body?.correlation_id ? String(req.body.correlation_id).trim() : null;
   const payload = req.body?.payload || {};
+  const rawRunContract = req.body?.run_contract || payload?.run_contract || {};
   const max_run_timeout_sec = req.body?.max_run_timeout_sec
     ? parsePositiveInt(req.body.max_run_timeout_sec, DEFAULT_RUN_TIMEOUT_SEC, 3600)
     : DEFAULT_RUN_TIMEOUT_SEC;
@@ -2553,68 +2711,101 @@ app.post("/runtime/trigger", async (req, res) => {
     if (!allowed) return;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    const taskIdCandidate = String(rawRunContract?.task_id || payload?.task_id || "").trim();
+    const taskRuntimeContext = taskIdCandidate ? await loadTaskRuntimeContext(taskIdCandidate) : null;
+    const runContract = normalizeRoleRunContract(rawRunContract, {
+      role,
+      task_id: taskRuntimeContext?.task?.id || taskIdCandidate || null,
+      stage_id: buildStageIdForTask(taskRuntimeContext?.task, rawRunContract?.stage_id || payload?.stage_id),
+      input_context: taskRuntimeContext
+        ? {
+            task_title: taskRuntimeContext.task.title,
+            task_status: taskRuntimeContext.task.status,
+            assignee: taskRuntimeContext.task.assignee,
+            task_contract: taskRuntimeContext.task.task_contract,
+            quality: taskRuntimeContext.quality,
+            review: taskRuntimeContext.review,
+          }
+        : {},
+      timeout_budget_sec: max_run_timeout_sec,
+    });
 
-    // Dedup check: try to insert into processed_triggers
-    const dedupResult = await client.query(
-      `INSERT INTO processed_triggers (trigger_id)
-       VALUES ($1)
-       ON CONFLICT (trigger_id) DO NOTHING
-       RETURNING trigger_id`,
-      [trigger_id]
-    );
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
 
-    if (dedupResult.rowCount === 0) {
-      // Duplicate — skip
+      const dedupResult = await client.query(
+        `INSERT INTO processed_triggers (trigger_id)
+         VALUES ($1)
+         ON CONFLICT (trigger_id) DO NOTHING
+         RETURNING trigger_id`,
+        [trigger_id]
+      );
+
+      if (dedupResult.rowCount === 0) {
+        await client.query("COMMIT");
+        await writeAction("trigger_duplicate_skipped", "agent_run", trigger_id, actor_role, {
+          trigger_id,
+          role,
+          task_id: runContract.task_id,
+          stage_id: runContract.stage_id,
+        });
+        return ok(res, {
+          accepted: false,
+          reason: "duplicate_trigger",
+          trigger_id,
+        });
+      }
+
+      const runId = id("run");
+      const corrId = correlation_id || id("cor");
+
+      await client.query(
+        `INSERT INTO agent_runs
+         (id, trigger_id, role, status, attempt_number, retry_of_run_id,
+          correlation_id, payload, run_contract, max_run_timeout_sec)
+         VALUES ($1, $2, $3, 'pending', 1, NULL, $4, $5::jsonb, $6::jsonb, $7)`,
+        [
+          runId,
+          trigger_id,
+          role,
+          corrId,
+          JSON.stringify(payload),
+          JSON.stringify(runContract),
+          max_run_timeout_sec,
+        ]
+      );
+
       await client.query("COMMIT");
-      await writeAction("trigger_duplicate_skipped", "agent_run", trigger_id, actor_role, {
+
+      await writeAction("run_accepted", "agent_run", runId, actor_role, {
         trigger_id,
         role,
+        task_id: runContract.task_id,
+        stage_id: runContract.stage_id,
+        correlation_id: corrId,
+        attempt_number: 1,
       });
+
       return ok(res, {
-        accepted: false,
-        reason: "duplicate_trigger",
+        accepted: true,
+        run_id: runId,
         trigger_id,
+        role,
+        status: "pending",
+        attempt_number: 1,
+        correlation_id: corrId,
+        run_contract: runContract,
       });
+    } catch (e) {
+      await client.query("ROLLBACK").catch(() => {});
+      return fail(res, 500, "runtime_trigger_failed", e.message);
+    } finally {
+      client.release();
     }
-
-    // Create agent_run
-    const runId = id("run");
-    const corrId = correlation_id || id("cor");
-
-    await client.query(
-      `INSERT INTO agent_runs
-       (id, trigger_id, role, status, attempt_number, retry_of_run_id,
-        correlation_id, payload, max_run_timeout_sec)
-       VALUES ($1, $2, $3, 'pending', 1, NULL, $4, $5::jsonb, $6)`,
-      [runId, trigger_id, role, corrId, JSON.stringify(payload), max_run_timeout_sec]
-    );
-
-    await client.query("COMMIT");
-
-    await writeAction("run_accepted", "agent_run", runId, actor_role, {
-      trigger_id,
-      role,
-      correlation_id: corrId,
-      attempt_number: 1,
-    });
-
-    return ok(res, {
-      accepted: true,
-      run_id: runId,
-      trigger_id,
-      role,
-      status: "pending",
-      attempt_number: 1,
-      correlation_id: corrId,
-    });
   } catch (e) {
-    await client.query("ROLLBACK").catch(() => {});
     return fail(res, 500, "runtime_trigger_failed", e.message);
-  } finally {
-    client.release();
   }
 });
 
@@ -2643,7 +2834,7 @@ app.post("/runtime/runs/:id/retry", async (req, res) => {
     // Lock the failed run for update
     const currentQ = await client.query(
       `SELECT id, trigger_id, role, status, attempt_number, correlation_id,
-              payload, max_run_timeout_sec
+              payload, run_contract, max_run_timeout_sec
        FROM agent_runs
        WHERE id = $1
        FOR UPDATE`,
@@ -2714,8 +2905,8 @@ app.post("/runtime/runs/:id/retry", async (req, res) => {
     await client.query(
       `INSERT INTO agent_runs
        (id, trigger_id, role, status, attempt_number, retry_of_run_id,
-        correlation_id, payload, max_run_timeout_sec)
-       VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7::jsonb, $8)`,
+        correlation_id, payload, run_contract, max_run_timeout_sec)
+       VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7::jsonb, $8::jsonb, $9)`,
       [
         newRunId,
         failedRun.trigger_id,
@@ -2724,6 +2915,7 @@ app.post("/runtime/runs/:id/retry", async (req, res) => {
         failedRunId,
         failedRun.correlation_id,
         JSON.stringify(failedRun.payload || {}),
+        JSON.stringify(failedRun.run_contract || {}),
         failedRun.max_run_timeout_sec,
       ]
     );
@@ -2734,6 +2926,8 @@ app.post("/runtime/runs/:id/retry", async (req, res) => {
       retry_of_run_id: failedRunId,
       trigger_id: failedRun.trigger_id,
       role: failedRun.role,
+      task_id: failedRun.run_contract?.task_id || null,
+      stage_id: failedRun.run_contract?.stage_id || null,
       attempt_number: nextAttempt,
       reason: reason || null,
     });
@@ -2747,6 +2941,7 @@ app.post("/runtime/runs/:id/retry", async (req, res) => {
       status: "pending",
       attempt_number: nextAttempt,
       correlation_id: failedRun.correlation_id,
+      run_contract: failedRun.run_contract || {},
     });
   } catch (e) {
     await client.query("ROLLBACK").catch(() => {});
@@ -2775,7 +2970,7 @@ app.post("/runtime/runs/:id/start", async (req, res) => {
       `UPDATE agent_runs
        SET status = 'running', started_at = now()
        WHERE id = $1 AND status = 'pending'
-       RETURNING id, trigger_id, role, status, attempt_number, correlation_id, started_at`,
+       RETURNING id, trigger_id, role, status, attempt_number, correlation_id, run_contract, started_at`,
       [runId]
     );
     if (q.rowCount === 0) {
@@ -2784,6 +2979,8 @@ app.post("/runtime/runs/:id/start", async (req, res) => {
     const row = q.rows[0];
     await writeAction("run_started", "agent_run", row.id, actor_role, {
       role: row.role,
+      task_id: row.run_contract?.task_id || null,
+      stage_id: row.run_contract?.stage_id || null,
       correlation_id: row.correlation_id,
     });
     return ok(res, row);
@@ -2823,7 +3020,7 @@ app.post("/runtime/runs/:id/complete", async (req, res) => {
            token_usage = $5::jsonb,
            finished_at = now()
        WHERE id = $1 AND status = 'running'
-       RETURNING id, trigger_id, role, status, attempt_number, correlation_id,
+       RETURNING id, trigger_id, role, status, attempt_number, correlation_id, run_contract,
                  error_message, started_at, finished_at`,
       [
         runId,
@@ -2842,6 +3039,8 @@ app.post("/runtime/runs/:id/complete", async (req, res) => {
     await writeAction("run_completed", "agent_run", row.id, actor_role, {
       status: row.status,
       role: row.role,
+      task_id: row.run_contract?.task_id || null,
+      stage_id: row.run_contract?.stage_id || null,
       correlation_id: row.correlation_id,
       error_message: row.error_message || null,
     });
@@ -2885,13 +3084,21 @@ app.get("/runtime/runs", async (req, res) => {
     vals.push(String(req.query.correlation_id).trim());
     where.push(`correlation_id = $${vals.length}`);
   }
+  if (req.query.task_id) {
+    vals.push(String(req.query.task_id).trim());
+    where.push(`run_contract->>'task_id' = $${vals.length}`);
+  }
+  if (req.query.stage_id) {
+    vals.push(String(req.query.stage_id).trim());
+    where.push(`run_contract->>'stage_id' = $${vals.length}`);
+  }
 
   vals.push(limit);
 
   try {
     const q = await pool.query(
       `SELECT id, trigger_id, role, status, attempt_number, retry_of_run_id,
-              correlation_id, error_message, max_run_timeout_sec,
+              correlation_id, run_contract, error_message, max_run_timeout_sec,
               started_at, finished_at, created_at
        FROM agent_runs
        ${where.length ? "WHERE " + where.join(" AND ") : ""}
@@ -2902,6 +3109,38 @@ app.get("/runtime/runs", async (req, res) => {
     return ok(res, { count: q.rowCount, runs: q.rows });
   } catch (e) {
     return fail(res, 500, "runtime_runs_query_failed", e.message);
+  }
+});
+
+app.get("/runtime/runs/:id", async (req, res) => {
+  const runId = req.params.id;
+  const actor_role = String(req.query.actor_role || "orchestrator").trim();
+  {
+    const allowed = await requireToolAccess(
+      res,
+      actor_role,
+      "runtime.read",
+      { entity_type: "agent_run", entity_id: runId }
+    );
+    if (!allowed) return;
+  }
+
+  try {
+    const q = await pool.query(
+      `SELECT id, trigger_id, role, status, attempt_number, retry_of_run_id,
+              correlation_id, payload, run_contract, result, error_message,
+              token_usage, max_run_timeout_sec, started_at, finished_at, created_at
+       FROM agent_runs
+       WHERE id = $1
+       LIMIT 1`,
+      [runId]
+    );
+    if (!q.rowCount) {
+      return fail(res, 404, "not_found", "agent_run not found");
+    }
+    return ok(res, q.rows[0]);
+  } catch (e) {
+    return fail(res, 500, "runtime_run_query_failed", e.message);
   }
 });
 
@@ -2933,3 +3172,4 @@ async function shutdownControlApi(signal) {
 
 process.on("SIGTERM", () => { void shutdownControlApi("SIGTERM"); });
 process.on("SIGINT", () => { void shutdownControlApi("SIGINT"); });
+
