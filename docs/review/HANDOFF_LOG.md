@@ -1206,3 +1206,27 @@ P2 items: pending
 ### Review ask
 1. P1 focus: confirm the contract shape is strict enough to become the handoff payload for role runs.
 2. P1 focus: confirm default contract generation from task title is acceptable for the first live version.
+
+## H-2026-03-28-13
+
+### Changes
+1. Resolved the dashboard XSS blocker found in review for commit `b70d367`.
+2. Replaced unsafe `innerHTML` rendering with safe DOM construction in the standard dashboard for:
+   - task cards
+   - task details
+   - review findings list
+   - approvals list
+   - chat log
+3. Kept the lane header rendering as template HTML because it only uses static lane metadata and numeric counts.
+
+### Checks
+1. Manual scan confirms user-controlled task contract fields no longer flow into `innerHTML` in `dashboard.html`.
+2. Manual scan confirms other nearby task/review/chat strings in the same file now render through `textContent`.
+
+### Open risks
+1. The migration backfill still updates all empty contracts in one transaction; acceptable for current scale, but still a known scaling risk.
+2. `normalizeTextArray` duplication and fallback-column detection regex remain follow-up cleanup items, not merge blockers.
+
+### Review ask
+1. P1 focus: confirm the dashboard no longer has a user-input-to-`innerHTML` path in the touched areas.
+2. P1 focus: confirm the remaining migration/perf note is acceptable as a documented follow-up rather than a release blocker.
