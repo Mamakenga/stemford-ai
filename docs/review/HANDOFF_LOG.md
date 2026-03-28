@@ -902,3 +902,21 @@ Review ask:
 Verdict: pending
 P1 items: pending
 P2 items: pending
+
+Update:
+- Simplified task creation flow in `app/control-api/public/dashboard.html`:
+  - removed prompts for `primary_goal_id`, `assignee role`, `plan_id`, `plan_step_order`, `start approval`, `end approval`, `quality checks`
+  - creation now asks only:
+    - task title
+    - human-readable assignee choice
+  - backend defaults are injected automatically:
+    - `primary_goal_id = goal_a_positioning_brief`
+    - `plan_id = current board plan filter or null`
+    - `plan_step_order = null`
+    - `requires_start_approval = false`
+    - `requires_end_approval = false`
+    - `quality_checks_required = result_summary`
+Checks (update):
+- Manual UX check of the create-task script confirms the visible prompts are now human-readable and reduced to the minimum viable flow.
+Open risks (update):
+- Goal and assignee are still stored as internal ids under the hood; the next UX pass should replace defaults/prompts with an inline composer and visible human labels everywhere.

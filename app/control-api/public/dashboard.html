@@ -119,6 +119,14 @@
 
     let tasks = [];
     let selectedTaskId = null;
+    const DEFAULT_GOAL_ID = "goal_a_positioning_brief";
+    const DEFAULT_QUALITY_CHECKS = "result_summary";
+    const ASSIGNEE_CHOICES = {
+      "1": { role: "pmo", label: "Операционный менеджер" },
+      "2": { role: "strategy", label: "Стратег" },
+      "3": { role: "finance", label: "Финансы" },
+      "4": { role: "orchestrator", label: "Оркестратор" },
+    };
 
     const actorRole = () => actorRoleEl.value || "orchestrator";
     const setStatus = (text, kind = "ok") => { statusEl.className = `status ${kind}`; statusEl.textContent = text; };
@@ -276,6 +284,16 @@
       btn.disabled = Boolean(disabled);
       btn.onclick = async () => { try { await handler(); } catch (e) { setStatus(`${label} failed: ${e.message}`, "bad"); } };
       return btn;
+    }
+
+    function pickAssigneeRole() {
+      const raw = prompt(
+        "Кому поручить задачу?\n1 - Операционный менеджер\n2 - Стратег\n3 - Финансы\n4 - Оркестратор",
+        "1"
+      );
+      if (raw === null) return null;
+      const choice = ASSIGNEE_CHOICES[String(raw).trim()] || ASSIGNEE_CHOICES["1"];
+      return choice;
     }
 
     function renderDetails(task, findings) {
@@ -454,18 +472,26 @@
     document.getElementById("btnRefresh").onclick = () => { void refreshAll(); };
     document.getElementById("btnCreateTask").onclick = async () => {
       try {
-        const title = prompt("Task title:");
+        const title = prompt("Как назвать задачу?");
         if (!title) return;
-        const goal = prompt("Primary goal id:", "goal_a_positioning_brief") || "goal_a_positioning_brief";
-        const assignee = prompt("Assignee role:", "pmo") || "pmo";
-        const planId = prompt("Plan id (optional):", "") || null;
-        const stepOrderRaw = prompt("Plan step order (optional number):", "") || "";
-        const requiresStart = confirm("Require START approval?");
-        const requiresEnd = confirm("Require END approval?");
-        const qualityChecksRaw = prompt("Quality checks (comma-separated):", "result_summary") || "result_summary";
-        const created = await apiPost("/tasks", { title, primary_goal_id: goal, assignee, actor_role: actorRole(), plan_id: planId || null, plan_step_order: stepOrderRaw ? Number(stepOrderRaw) : null, requires_start_approval: requiresStart, requires_end_approval: requiresEnd, quality_checks_required: qualityChecksRaw });
+        const assigneeChoice = pickAssigneeRole();
+        if (!assigneeChoice) return;
+        const created = await apiPost("/tasks", {
+          title,
+          primary_goal_id: DEFAULT_GOAL_ID,
+          assignee: assigneeChoice.role,
+          actor_role: actorRole(),
+          plan_id: planFilterEl.value.trim() || null,
+          plan_step_order: null,
+          requires_start_approval: false,
+          requires_end_approval: false,
+          quality_checks_required: DEFAULT_QUALITY_CHECKS,
+        });
         await refreshAll();
-        if (created && created.id) await selectTask(created.id);
+        if (created && created.id) {
+          await selectTask(created.id);
+          setStatus(`Task created: ${created.title} -> ${assigneeChoice.label}`, "ok");
+        }
       } catch (e) {
         setStatus(`Create task failed: ${e.message}`, "bad");
       }
