@@ -985,3 +985,37 @@ Review ask:
 Verdict: pending
 P1 items: pending
 P2 items: pending
+
+---
+
+## H-2026-03-28-06
+Role: Codex=Executor
+Scope: Non-conflicting plan structure (product ladder + plan map)
+Commits: pending
+Changes:
+- Added `plans/README.md` as the canonical map of all plan files with explicit categories:
+  - active canon
+  - business canon
+  - archive/reference
+- Added three separate product plans:
+  - `plans/PLAN_Coder_Factory.md`
+  - `plans/PLAN_Business_Control_Plane.md`
+  - `plans/PLAN_Service_Productization.md`
+- Wired the new structure into navigation:
+  - `START_HERE.md`
+  - `plans/PLAN_OpenClaw_Control_Plane.md`
+- Explicitly fixed the product ladder:
+  - coder factory
+  - business control plane
+  - reusable service
+Checks:
+- Manual read-through confirms each new file has one role and does not duplicate the existing technical canon.
+- New files are linked from `START_HERE.md` and the control-plane plan.
+Open risks:
+- Historical files `CONCEPT_Stemford_AI_Deputies_Codex.md` and `PLAN_Deputies_Launch_Opus.md` are now classified as archive in the map, but their own headers are not yet rewritten.
+- There is still in-progress local code for `coder_factory.html` that remains intentionally outside this planning commit.
+Review ask:
+- Validate that the new plan map is strict enough to remove ambiguity about which plans are active and which are historical.
+Verdict: pending
+P1 items: pending
+P2 items: pending
