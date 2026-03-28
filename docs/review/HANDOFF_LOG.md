@@ -1304,3 +1304,34 @@ P2 items: pending
 ### Review ask
 1. P1 focus: confirm the run snapshot is now transaction-consistent enough for the first live role dispatch layer.
 2. P1 focus: confirm retry snapshot reuse is now explicit enough to be treated as intentional design, not accidental staleness.
+
+## H-2026-03-28-17
+
+### Changes
+1. Added a first real bridge from task to role-run:
+   - `POST /tasks/:id/runtime-dispatch`
+2. Added task-scoped runtime run listing:
+   - `GET /tasks/:id/runtime-runs`
+3. Dispatch now:
+   - loads task context
+   - chooses executor/reviewer/deployer role
+   - blocks duplicate active run for the same task stage and role
+   - creates a pending `agent_run`
+   - records task-level and run-level audit events
+4. Updated `coder_factory.html` so the selected task now shows:
+   - a `Queue <role> run` action
+   - latest role runs for that task
+
+### Checks
+1. `node --check app/control-api/server.js` passes.
+2. Extracted script from `app/control-api/public/coder_factory.html` passes `node --check`.
+3. Manual code review confirms the new bridge is task-scoped and reuses the formal `run_contract` shape.
+
+### Open risks
+1. This queues pending runs, but does not yet start real executor/reviewer/deployer workers automatically.
+2. The coder dashboard still has older `innerHTML` rendering paths outside this step; this pass focused on role-run behavior, not full DOM hardening.
+3. `human_telegram` is currently used as the owner-side actor for dashboard dispatch because it is already allowed through tool-access policy.
+
+### Review ask
+1. P1 focus: confirm the task-to-run bridge is the right first dispatch shape before automatic orchestrator wiring.
+2. P1 focus: confirm duplicate-run blocking by `(task_id, stage_id, role, pending/running)` is strict enough for the next step.

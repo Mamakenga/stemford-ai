@@ -222,6 +222,8 @@ function buildDefaultAllowedToolsForRole(role) {
   }
 }
 
+const CODER_FACTORY_RUNTIME_ROLES = new Set(["executor", "reviewer", "deployer"]);
+
 function buildDefaultOutputFormatForRole(role) {
   switch (String(role || "").trim().toLowerCase()) {
     case "executor":
@@ -271,6 +273,18 @@ function buildStageIdForTask(task, explicitStageId = null) {
   }
   if (task?.id) return `${task.id}:main`;
   return "legacy:unassigned";
+}
+
+function buildRunInputContextFromTask(taskRuntimeContext) {
+  if (!taskRuntimeContext?.task) return {};
+  return {
+    task_title: taskRuntimeContext.task.title,
+    task_status: taskRuntimeContext.task.status,
+    assignee: taskRuntimeContext.task.assignee,
+    task_contract: taskRuntimeContext.task.task_contract,
+    quality: taskRuntimeContext.quality,
+    review: taskRuntimeContext.review,
+  };
 }
 
 function normalizeRoleRunContract(raw, fallback = {}) {
@@ -2683,6 +2697,188 @@ app.post("/tasks/:id/retry", async (req, res) => {
   }
 });
 
+
+app.post("/tasks/:id/runtime-dispatch", async (req, res) => {
+  const taskId = req.params.id;
+  const actor_role = String(req.body?.actor_role || "").trim();
+  const requestedRole = String(req.body?.role || "").trim().toLowerCase();
+  const explicitStageId = req.body?.stage_id ? String(req.body.stage_id).trim() : null;
+  const reason = req.body?.reason ? String(req.body.reason).trim() : null;
+
+  if (!actor_role) {
+    return fail(res, 400, "validation_error", "actor_role is required");
+  }
+  {
+    const allowed = await requireToolAccess(
+      res,
+      actor_role,
+      "runtime.accept",
+      { entity_type: "task", entity_id: taskId }
+    );
+    if (!allowed) return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const taskRuntimeContext = await loadTaskRuntimeContext(taskId, client);
+    if (!taskRuntimeContext) {
+      await client.query("COMMIT");
+      return fail(res, 404, "not_found", "task not found");
+    }
+
+    const role = requestedRole || String(taskRuntimeContext.task.assignee || "").trim().toLowerCase();
+    if (!CODER_FACTORY_RUNTIME_ROLES.has(role)) {
+      await client.query("COMMIT");
+      return fail(res, 400, "validation_error", "role must be executor, reviewer, or deployer");
+    }
+
+    const stage_id = buildStageIdForTask(taskRuntimeContext.task, explicitStageId);
+
+    const activeRunQ = await client.query(
+      `SELECT id, status
+       FROM agent_runs
+       WHERE role = $1
+         AND status IN ('pending', 'running')
+         AND run_contract->>'task_id' = $2
+         AND run_contract->>'stage_id' = $3
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [role, taskId, stage_id]
+    );
+    if (activeRunQ.rowCount > 0) {
+      await client.query("COMMIT");
+      return fail(
+        res,
+        409,
+        "runtime_run_already_active",
+        `active ${role} run already exists for this task stage: ${activeRunQ.rows[0].id}`
+      );
+    }
+
+    const trigger_id = id("trg");
+    const run_id = id("run");
+    const correlation_id = id("cor");
+    const payload = {
+      task_id: taskId,
+      stage_id,
+      role,
+      dispatch_source: "task_runtime_dispatch",
+      reason: reason || null,
+    };
+    const runContract = normalizeRoleRunContract({}, {
+      role,
+      task_id: taskId,
+      stage_id,
+      input_context: buildRunInputContextFromTask(taskRuntimeContext),
+      timeout_budget_sec: DEFAULT_RUN_TIMEOUT_SEC,
+    });
+
+    await client.query(
+      `INSERT INTO processed_triggers (trigger_id)
+       VALUES ($1)`,
+      [trigger_id]
+    );
+
+    await client.query(
+      `INSERT INTO agent_runs
+       (id, trigger_id, role, status, attempt_number, retry_of_run_id,
+        correlation_id, payload, run_contract, max_run_timeout_sec)
+       VALUES ($1, $2, $3, 'pending', 1, NULL, $4, $5::jsonb, $6::jsonb, $7)`,
+      [
+        run_id,
+        trigger_id,
+        role,
+        correlation_id,
+        JSON.stringify(payload),
+        JSON.stringify(runContract),
+        runContract.timeout_budget_sec,
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    await writeAction("run_accepted", "agent_run", run_id, actor_role, {
+      trigger_id,
+      role,
+      task_id: taskId,
+      stage_id,
+      correlation_id,
+      attempt_number: 1,
+      dispatch_source: "task_runtime_dispatch",
+    });
+    await writeAction("task_role_run_queued", "task", taskId, actor_role, {
+      role,
+      run_id,
+      stage_id,
+      reason: reason || null,
+    });
+
+    return ok(res, {
+      accepted: true,
+      task_id: taskId,
+      run_id,
+      trigger_id,
+      role,
+      stage_id,
+      status: "pending",
+      correlation_id,
+      run_contract: runContract,
+    });
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    return fail(res, 500, "task_runtime_dispatch_failed", e.message);
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/tasks/:id/runtime-runs", async (req, res) => {
+  const taskId = req.params.id;
+  const actor_role = String(req.query.actor_role || "orchestrator").trim();
+  const limit = parsePositiveInt(req.query.limit, 20, 100);
+  const where = [`run_contract->>'task_id' = $1`];
+  const vals = [taskId];
+
+  {
+    const allowed = await requireToolAccess(
+      res,
+      actor_role,
+      "runtime.read",
+      { entity_type: "task", entity_id: taskId }
+    );
+    if (!allowed) return;
+  }
+
+  if (req.query.role) {
+    vals.push(String(req.query.role).trim());
+    where.push(`role = $${vals.length}`);
+  }
+  if (req.query.status) {
+    vals.push(String(req.query.status).trim());
+    where.push(`status = $${vals.length}`);
+  }
+
+  vals.push(limit);
+
+  try {
+    const q = await pool.query(
+      `SELECT id, trigger_id, role, status, attempt_number, retry_of_run_id,
+              correlation_id, run_contract, error_message, max_run_timeout_sec,
+              started_at, finished_at, created_at
+       FROM agent_runs
+       WHERE ${where.join(" AND ")}
+       ORDER BY created_at DESC
+       LIMIT $${vals.length}`,
+      vals
+    );
+    return ok(res, { count: q.rowCount, items: q.rows });
+  } catch (e) {
+    return fail(res, 500, "task_runtime_runs_query_failed", e.message);
+  }
+});
+
 /* ===== H-27: Runtime core — acceptTrigger + retryRun ===== */
 
 // POST /runtime/trigger — acceptTrigger(triggerId, payload)
@@ -2722,16 +2918,7 @@ app.post("/runtime/trigger", async (req, res) => {
       role,
       task_id: taskRuntimeContext?.task?.id || taskIdCandidate || null,
       stage_id: buildStageIdForTask(taskRuntimeContext?.task, rawRunContract?.stage_id || payload?.stage_id),
-      input_context: taskRuntimeContext
-        ? {
-            task_title: taskRuntimeContext.task.title,
-            task_status: taskRuntimeContext.task.status,
-            assignee: taskRuntimeContext.task.assignee,
-            task_contract: taskRuntimeContext.task.task_contract,
-            quality: taskRuntimeContext.quality,
-            review: taskRuntimeContext.review,
-          }
-        : {},
+      input_context: buildRunInputContextFromTask(taskRuntimeContext),
       timeout_budget_sec: max_run_timeout_sec,
     });
 
@@ -3171,4 +3358,7 @@ async function shutdownControlApi(signal) {
 
 process.on("SIGTERM", () => { void shutdownControlApi("SIGTERM"); });
 process.on("SIGINT", () => { void shutdownControlApi("SIGINT"); });
+
+
+
 

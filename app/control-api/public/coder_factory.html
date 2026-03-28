@@ -142,6 +142,10 @@
           <div class="detail-grid" id="detailGrid"></div>
           <div class="actions" id="detailActions" style="margin-top:12px"></div>
           <div style="margin-top:12px">
+            <strong>Role Runs</strong>
+            <div class="task-log" id="runLog" style="margin-top:8px"></div>
+          </div>
+          <div style="margin-top:12px">
             <strong>Executor / Reviewer Discussion</strong>
             <div class="task-log" id="taskLog" style="margin-top:8px"></div>
           </div>
@@ -179,12 +183,14 @@
     const detailRoleEl = document.getElementById("detailRole");
     const detailGridEl = document.getElementById("detailGrid");
     const detailActionsEl = document.getElementById("detailActions");
+    const runLogEl = document.getElementById("runLog");
     const taskLogEl = document.getElementById("taskLog");
     const statusEl = document.getElementById("status");
 
     let tasks = [];
     let approvals = [];
     let chatItems = [];
+    let taskRuns = [];
     let selectedTaskId = null;
 
     const setStatus = (text, kind = "ok") => {
@@ -216,6 +222,12 @@
 
     function selectedTask() {
       return coderTasks().find((task) => task.id === selectedTaskId) || null;
+    }
+
+    function activeRunForSelectedTask(task) {
+      const role = String(task?.assignee || "").trim().toLowerCase();
+      if (!role) return null;
+      return taskRuns.find((run) => run.role === role && ["pending", "running"].includes(String(run.status || "").trim().toLowerCase())) || null;
     }
 
     function stageLabel(task) {
@@ -344,7 +356,7 @@
           const nextTask = step.tasks.find((task) => task.status !== "done") || step.tasks[0];
           if (nextTask) {
             selectedTaskId = nextTask.id;
-            renderAll();
+            void refreshAll();
           }
         };
         planListEl.appendChild(row);
@@ -378,7 +390,7 @@
             card.className = `card${task.id === selectedTaskId ? " selected" : ""}`;
             card.onclick = () => {
               selectedTaskId = task.id;
-              renderAll();
+              void refreshAll();
             };
             const chips = chipsFor(task).map((chip) => `<span class="badge ${chip.cls}">${chip.text}</span>`).join("");
             card.innerHTML = `
@@ -481,12 +493,14 @@
       const task = selectedTask();
       detailGridEl.innerHTML = "";
       detailActionsEl.innerHTML = "";
+      runLogEl.innerHTML = "";
       taskLogEl.innerHTML = "";
 
       if (!task) {
         detailTitleEl.textContent = "Task Detail";
         detailRoleEl.textContent = "select a card";
         detailGridEl.innerHTML = `<div class="detail-box"><div class="k">Selected task</div><div class="v">Open a card to inspect the coder conversation.</div></div>`;
+        runLogEl.innerHTML = `<div class="empty">No task selected.</div>`;
         taskLogEl.innerHTML = `<div class="empty">No task selected.</div>`;
         return;
       }
@@ -518,6 +532,39 @@
         window.location.href = `/dashboard`;
       };
       detailActionsEl.appendChild(openInBoard);
+
+      const activeRun = activeRunForSelectedTask(task);
+      const queueRun = document.createElement("button");
+      queueRun.textContent = activeRun
+        ? `${String(task.assignee || "").trim() || "role"} run active`
+        : `Queue ${String(task.assignee || "").trim() || "role"} run`;
+      queueRun.disabled = Boolean(activeRun);
+      queueRun.onclick = async () => {
+        try {
+          setStatus(`Queueing ${task.assignee} run for ${task.id}...`, "warn");
+          await apiPost(`/tasks/${encodeURIComponent(task.id)}/runtime-dispatch`, {
+            actor_role: "human_telegram",
+            role: task.assignee,
+            reason: "queued from coder factory dashboard",
+          });
+          await refreshAll();
+        } catch (e) {
+          setStatus(`Queue run failed: ${e.message}`, "bad");
+        }
+      };
+      detailActionsEl.appendChild(queueRun);
+
+      if (!taskRuns.length) {
+        runLogEl.innerHTML = `<div class="empty">No role runs yet for this task.</div>`;
+      } else {
+        taskRuns.forEach((run) => {
+          const row = document.createElement("div");
+          row.className = "task-item";
+          const stage = run.run_contract && run.run_contract.stage_id ? run.run_contract.stage_id : "-";
+          row.innerHTML = `<div><span class="author">${run.role}</span> | ${run.status}</div><div>stage: ${stage}</div><div class="small">${run.id} | ${run.created_at || ""}</div>`;
+          runLogEl.appendChild(row);
+        });
+      }
 
       const discuss = chatItems.filter((item) => item.task_id === task.id && TASK_CHAT_ROLES.has(String(item.author_role || "").trim()));
       if (!discuss.length) {
@@ -555,6 +602,12 @@
         approvals = approvalData.items || [];
         chatItems = chatData.items || [];
         if (selectedTaskId && !tasks.some((task) => task.id === selectedTaskId)) selectedTaskId = null;
+        if (selectedTaskId) {
+          const runData = await apiGet(`/tasks/${encodeURIComponent(selectedTaskId)}/runtime-runs?actor_role=human_telegram&limit=20`);
+          taskRuns = runData.items || [];
+        } else {
+          taskRuns = [];
+        }
         renderAll();
         setStatus(`Updated at ${new Date().toLocaleTimeString()}`, "ok");
       } catch (e) {
