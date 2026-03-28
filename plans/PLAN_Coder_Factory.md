@@ -39,7 +39,7 @@ Important distinction:
 
 ## 1.1) OpenClaw attachment readiness
 
-The control-plane foundation is already strong enough to begin attaching the OpenClaw runtime layer.
+The control-plane foundation is already structurally ready to begin attaching the OpenClaw runtime layer.
 
 What is already in place:
 1. task registry and task statuses
@@ -51,8 +51,9 @@ What is already in place:
 7. retry, dead-letter, and watchdog behavior
 
 Practical meaning:
-1. the rails are already good enough for the first working OpenClaw integration
+1. the current control plane is a usable scaffolding for the first working OpenClaw integration
 2. the missing work is now mostly about role separation and runtime wiring, not about inventing the whole foundation from zero
+3. this is still scaffolding, not a finished role-orchestration system
 
 ## 1.2) Remaining gaps before full role runtime
 
@@ -142,7 +143,7 @@ This is preferred over a "single general agent with many skills" model.
 Practical meaning:
 1. roles are separated by runtime profile, not just by wording
 2. `executor`, `reviewer`, and `deployer` do not share the same active run
-3. every role action is independently visible, retryable, and auditable
+3. every role action is independently visible, retryable, and auditable through the run model defined in section 7.3
 
 ## 7) Required contracts
 
@@ -208,6 +209,10 @@ This is what makes the roles real subagents instead of three labels on one bot.
 6. separate visible timeline entry in the dashboard
 
 If these conditions are not met, the system is only simulating multi-agent behavior, not implementing it.
+
+Verified by:
+1. at least one runtime integration scenario that spawns `executor`, `reviewer`, and `deployer` as separate runs on the same task
+2. dashboard evidence showing three separate timeline entries and run records for that task
 
 ## 8) Provider routing policy
 
@@ -336,7 +341,7 @@ Executor runtime must:
 Result:
 1. executor becomes a controlled worker, not a free-form chatbot.
 
-Step 8.1. Persist the executor run as a first-class database object.
+Step 8A. Persist the executor run as a first-class database object.
 Required behavior:
 1. executor start creates or updates an `agent_runs` record
 2. role, task, stage, status, and failure reason are queryable through the control plane
@@ -362,7 +367,7 @@ Allowed verdicts:
 Result:
 1. reviewer becomes a formal gate, not an informal commenter.
 
-Step 9.1. Persist the reviewer run and verdict separately from the executor run.
+Step 9A. Persist the reviewer run and verdict separately from the executor run.
 Required behavior:
 1. reviewer gets a new `agent_runs` record
 2. review findings are stored in `review_findings`
@@ -381,7 +386,7 @@ Deployer must:
 Result:
 1. deploy becomes visible, bounded, and auditable.
 
-Step 10.1. Persist deploy outcome as its own run stage.
+Step 10A. Persist deploy outcome as its own run stage.
 Required behavior:
 1. deployer gets a new `agent_runs` record
 2. smoke result is stored back into task/run context

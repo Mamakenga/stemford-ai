@@ -1230,3 +1230,24 @@ P2 items: pending
 ### Review ask
 1. P1 focus: confirm the dashboard no longer has a user-input-to-`innerHTML` path in the touched areas.
 2. P1 focus: confirm the remaining migration/perf note is acceptable as a documented follow-up rather than a release blocker.
+
+## H-2026-03-28-14
+
+### Changes
+1. Refined `plans/PLAN_Coder_Factory.md` in response to plan review for commit `77987fc`.
+2. Softened readiness wording from "already strong enough" to a more honest "structurally ready / usable scaffolding".
+3. Added an explicit verification clause for the subagent-separation checklist in section `7.4`.
+4. Replaced fragile substep numbering `8.1 / 9.1 / 10.1` with `8A / 9A / 10A`.
+5. Reduced one repeated phrasing by pointing runtime visibility back to the canonical run model in section `7.3`.
+
+### Checks
+1. Manual read-through confirms the plan still says the same thing technically, but now overstates less.
+2. Manual read-through confirms role-isolation criteria are now testable, not only descriptive.
+
+### Open risks
+1. The plan still intentionally repeats a small amount of role-isolation language because this is a working blueprint, not a minimal spec.
+2. Further editorial tightening can happen later, but there is no remaining review blocker in this pass.
+
+### Review ask
+1. P1 focus: confirm the revised readiness wording no longer implies completed role orchestration.
+2. P1 focus: confirm the new verification clause is specific enough to make section `7.4` testable.
