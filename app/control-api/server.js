@@ -338,9 +338,9 @@ function normalizeRoleRunContract(raw, fallback = {}) {
   };
 }
 
-async function loadTaskRuntimeContext(taskId) {
+async function loadTaskRuntimeContext(taskId, db = pool) {
   if (!taskId) return null;
-  const q = await pool.query(
+  const q = await db.query(
     `select id,title,primary_goal_id,status,assignee,due_at,
             plan_id,plan_step_order,
             requires_start_approval,requires_end_approval,
@@ -2711,9 +2711,13 @@ app.post("/runtime/trigger", async (req, res) => {
     if (!allowed) return;
   }
 
+  const client = await pool.connect();
   try {
+    await client.query("BEGIN");
     const taskIdCandidate = String(rawRunContract?.task_id || payload?.task_id || "").trim();
-    const taskRuntimeContext = taskIdCandidate ? await loadTaskRuntimeContext(taskIdCandidate) : null;
+    const taskRuntimeContext = taskIdCandidate
+      ? await loadTaskRuntimeContext(taskIdCandidate, client)
+      : null;
     const runContract = normalizeRoleRunContract(rawRunContract, {
       role,
       task_id: taskRuntimeContext?.task?.id || taskIdCandidate || null,
@@ -2731,81 +2735,74 @@ app.post("/runtime/trigger", async (req, res) => {
       timeout_budget_sec: max_run_timeout_sec,
     });
 
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
+    const dedupResult = await client.query(
+      `INSERT INTO processed_triggers (trigger_id)
+       VALUES ($1)
+       ON CONFLICT (trigger_id) DO NOTHING
+       RETURNING trigger_id`,
+      [trigger_id]
+    );
 
-      const dedupResult = await client.query(
-        `INSERT INTO processed_triggers (trigger_id)
-         VALUES ($1)
-         ON CONFLICT (trigger_id) DO NOTHING
-         RETURNING trigger_id`,
-        [trigger_id]
-      );
-
-      if (dedupResult.rowCount === 0) {
-        await client.query("COMMIT");
-        await writeAction("trigger_duplicate_skipped", "agent_run", trigger_id, actor_role, {
-          trigger_id,
-          role,
-          task_id: runContract.task_id,
-          stage_id: runContract.stage_id,
-        });
-        return ok(res, {
-          accepted: false,
-          reason: "duplicate_trigger",
-          trigger_id,
-        });
-      }
-
-      const runId = id("run");
-      const corrId = correlation_id || id("cor");
-
-      await client.query(
-        `INSERT INTO agent_runs
-         (id, trigger_id, role, status, attempt_number, retry_of_run_id,
-          correlation_id, payload, run_contract, max_run_timeout_sec)
-         VALUES ($1, $2, $3, 'pending', 1, NULL, $4, $5::jsonb, $6::jsonb, $7)`,
-        [
-          runId,
-          trigger_id,
-          role,
-          corrId,
-          JSON.stringify(payload),
-          JSON.stringify(runContract),
-          max_run_timeout_sec,
-        ]
-      );
-
+    if (dedupResult.rowCount === 0) {
       await client.query("COMMIT");
-
-      await writeAction("run_accepted", "agent_run", runId, actor_role, {
+      await writeAction("trigger_duplicate_skipped", "agent_run", trigger_id, actor_role, {
         trigger_id,
         role,
         task_id: runContract.task_id,
         stage_id: runContract.stage_id,
-        correlation_id: corrId,
-        attempt_number: 1,
       });
-
       return ok(res, {
-        accepted: true,
-        run_id: runId,
+        accepted: false,
+        reason: "duplicate_trigger",
+        trigger_id,
+      });
+    }
+
+    const runId = id("run");
+    const corrId = correlation_id || id("cor");
+
+    await client.query(
+      `INSERT INTO agent_runs
+       (id, trigger_id, role, status, attempt_number, retry_of_run_id,
+        correlation_id, payload, run_contract, max_run_timeout_sec)
+       VALUES ($1, $2, $3, 'pending', 1, NULL, $4, $5::jsonb, $6::jsonb, $7)`,
+      [
+        runId,
         trigger_id,
         role,
-        status: "pending",
-        attempt_number: 1,
-        correlation_id: corrId,
-        run_contract: runContract,
-      });
-    } catch (e) {
-      await client.query("ROLLBACK").catch(() => {});
-      return fail(res, 500, "runtime_trigger_failed", e.message);
-    } finally {
-      client.release();
-    }
+        corrId,
+        JSON.stringify(payload),
+        JSON.stringify(runContract),
+        max_run_timeout_sec,
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    await writeAction("run_accepted", "agent_run", runId, actor_role, {
+      trigger_id,
+      role,
+      task_id: runContract.task_id,
+      stage_id: runContract.stage_id,
+      correlation_id: corrId,
+      attempt_number: 1,
+    });
+
+    return ok(res, {
+      accepted: true,
+      run_id: runId,
+      trigger_id,
+      role,
+      status: "pending",
+      attempt_number: 1,
+      correlation_id: corrId,
+      run_contract: runContract,
+    });
   } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
     return fail(res, 500, "runtime_trigger_failed", e.message);
+  } finally {
+    client.release();
   }
 });
 
@@ -2899,7 +2896,9 @@ app.post("/runtime/runs/:id/retry", async (req, res) => {
       });
     }
 
-    // Create retry run — bypasses processed_triggers (same trigger_id, new run)
+    // Create retry run - bypasses processed_triggers (same trigger_id, new run)
+    // Retry intentionally reuses the same run contract snapshot.
+    // It repeats the same role assignment rather than re-hydrating fresh task context.
     const newRunId = id("run");
 
     await client.query(
@@ -3172,4 +3171,5 @@ async function shutdownControlApi(signal) {
 
 process.on("SIGTERM", () => { void shutdownControlApi("SIGTERM"); });
 process.on("SIGINT", () => { void shutdownControlApi("SIGINT"); });
+
 

@@ -1282,3 +1282,25 @@ P2 items: pending
 ### Review ask
 1. P1 focus: confirm the `run_contract` shape is strict enough for the first executor/reviewer/deployer wiring step.
 2. P1 focus: confirm the task-context enrichment in `/runtime/trigger` is additive and does not hide important caller intent.
+
+## H-2026-03-28-16
+
+### Changes
+1. Closed the runtime-trigger race window found in review for commit `c202727`.
+2. `loadTaskRuntimeContext` now accepts a database handle, so `/runtime/trigger` reads task context through the same transaction client that inserts the run.
+3. This makes `run_contract` a transaction-time snapshot instead of a pre-transaction read.
+4. Added an explicit code comment documenting retry behavior:
+   - retry intentionally reuses the same run-contract snapshot
+   - retry is a repeat of the same role assignment, not a fresh task-context rebuild
+
+### Checks
+1. Manual inspection confirms task-context read now happens after `BEGIN` and through the same `client`.
+2. `node --check app/control-api/server.js` passes after the change.
+
+### Open risks
+1. Trigger-time enrichment still performs a relatively heavy task lookup per task-scoped runtime trigger; acceptable now, but a future hot-path optimization target.
+2. Allowed-tool names still live as hardcoded strings; that remains a separate follow-up for runtime enforcement.
+
+### Review ask
+1. P1 focus: confirm the run snapshot is now transaction-consistent enough for the first live role dispatch layer.
+2. P1 focus: confirm retry snapshot reuse is now explicit enough to be treated as intentional design, not accidental staleness.
