@@ -9,15 +9,17 @@ Scope: first product layer
 
 If you want the full picture without getting lost, read in this order:
 1. `PLAN_Coder_Factory.md`
-2. `PLAN_OpenClaw_Control_Plane.md`
-3. `PLAN_Implementation_Reliability_Kanban.md`
-4. `PLAN_UX_CoderFactory_and_Business_Control.md`
+2. `PLAN_Coder_Factory_Implementation.md`
+3. `PLAN_OpenClaw_Control_Plane.md`
+4. `PLAN_Implementation_Reliability_Kanban.md`
+5. `PLAN_UX_CoderFactory_and_Business_Control.md`
 
 Meaning:
 1. this file explains the product
-2. control-plane explains the rails under the product
-3. implementation plan explains the current execution sequence
-4. UX plan explains the owner-facing interface
+2. coder-factory implementation plan explains the concrete build order
+3. control-plane explains the rails under the product
+4. implementation plan explains the current execution sequence
+5. UX plan explains the owner-facing interface
 
 ## 1) What Already Exists Under The Factory
 
@@ -93,9 +95,10 @@ Canonical UX source:
 ## 7) Technical implementation source
 
 Canonical technical sources:
-1. `PLAN_OpenClaw_Control_Plane.md`
-2. `ROADMAP_OpenClaw_Front_CICD_Back.md`
-3. `PLAN_Implementation_Reliability_Kanban.md`
+1. `PLAN_Coder_Factory_Implementation.md`
+2. `PLAN_OpenClaw_Control_Plane.md`
+3. `ROADMAP_OpenClaw_Front_CICD_Back.md`
+4. `PLAN_Implementation_Reliability_Kanban.md`
 
 ## 8) Boundaries
 

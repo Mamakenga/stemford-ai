@@ -8,11 +8,12 @@ Date: 2026-03-28
 
 Use this order and stop as soon as the picture becomes clear:
 1. `PLAN_Coder_Factory.md` - what we build first
-2. `PLAN_OpenClaw_Control_Plane.md` - what technical rails already exist under it
-3. `PLAN_Implementation_Reliability_Kanban.md` - what is being implemented step by step
-4. `PLAN_UX_CoderFactory_and_Business_Control.md` - how the two dashboards must differ
+2. `PLAN_Coder_Factory_Implementation.md` - how we build the coder factory step by step
+3. `PLAN_OpenClaw_Control_Plane.md` - what technical rails already exist under it
+4. `PLAN_Implementation_Reliability_Kanban.md` - what is being implemented step by step
+5. `PLAN_UX_CoderFactory_and_Business_Control.md` - how the two dashboards must differ
 
-This 4-file route is the shortest safe navigation path.
+This is the shortest safe navigation path for coder-factory work.
 
 ## 2) Project Ladder
 
@@ -71,10 +72,11 @@ Short rule:
 3. `PLAN_Service_Productization.md` - level 3 product plan
 
 ### Technical canon
-1. `PLAN_OpenClaw_Control_Plane.md` - technical strategy and architecture
-2. `ROADMAP_OpenClaw_Front_CICD_Back.md` - stage-by-stage roadmap
-3. `PLAN_Implementation_Reliability_Kanban.md` - executable implementation phases
-4. `PLAN_UX_CoderFactory_and_Business_Control.md` - dashboard UX canon
+1. `PLAN_Coder_Factory_Implementation.md` - executable build order for the coder factory
+2. `PLAN_OpenClaw_Control_Plane.md` - technical strategy and architecture
+3. `ROADMAP_OpenClaw_Front_CICD_Back.md` - stage-by-stage roadmap
+4. `PLAN_Implementation_Reliability_Kanban.md` - executable implementation phases
+5. `PLAN_UX_CoderFactory_and_Business_Control.md` - dashboard UX canon
 
 ### Stemford business canon
 1. `PLAN_Stemford_Three_Echelons.md` - strategic business ladder
@@ -94,10 +96,14 @@ Important:
 
 If the question is "What are we building right now?":
 1. `PLAN_Coder_Factory.md`
+2. `PLAN_Coder_Factory_Implementation.md`
 
 If the question is "What technical base already exists?":
 1. `PLAN_OpenClaw_Control_Plane.md`
 2. `PLAN_Implementation_Reliability_Kanban.md`
+
+If the question is "What exactly do we do next for coder factory?":
+1. `PLAN_Coder_Factory_Implementation.md`
 
 If the question is "How should the coder dashboard look and behave?":
 1. `PLAN_UX_CoderFactory_and_Business_Control.md`
@@ -122,9 +128,10 @@ When two files seem to overlap:
 ## 8) One-Sentence Summary Of Each Main File
 
 1. `PLAN_Coder_Factory.md` - the first real product we are building now
-2. `PLAN_Business_Control_Plane.md` - the second product, built later by the coder factory
-3. `PLAN_Service_Productization.md` - the future generalized service
-4. `PLAN_OpenClaw_Control_Plane.md` - the safe technical skeleton under everything
-5. `ROADMAP_OpenClaw_Front_CICD_Back.md` - the roadmap of technical stages
-6. `PLAN_Implementation_Reliability_Kanban.md` - the current execution plan
-7. `PLAN_UX_CoderFactory_and_Business_Control.md` - the UX split between the two dashboards
+2. `PLAN_Coder_Factory_Implementation.md` - the concrete build sequence for the coder factory
+3. `PLAN_Business_Control_Plane.md` - the second product, built later by the coder factory
+4. `PLAN_Service_Productization.md` - the future generalized service
+5. `PLAN_OpenClaw_Control_Plane.md` - the safe technical skeleton under everything
+6. `ROADMAP_OpenClaw_Front_CICD_Back.md` - the roadmap of technical stages
+7. `PLAN_Implementation_Reliability_Kanban.md` - the current execution plan
+8. `PLAN_UX_CoderFactory_and_Business_Control.md` - the UX split between the two dashboards

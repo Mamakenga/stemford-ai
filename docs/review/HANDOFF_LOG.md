@@ -1085,3 +1085,30 @@ P2 items: pending
 ### Review ask
 1. P1 focus: confirm the project can now be navigated from `START_HERE.md` without extra verbal explanation.
 2. P1 focus: confirm the distinction between safe rails, OpenClaw runtime, coder factory, and business control plane is now explicit enough in the active canon.
+
+## H-2026-03-28-09
+
+### Changes
+1. Added `plans/PLAN_Coder_Factory_Implementation.md` as a concrete execution plan for the coder factory.
+2. Split the coder-factory plan stack more clearly:
+   - `PLAN_Coder_Factory.md` = product definition
+   - `PLAN_Coder_Factory_Implementation.md` = concrete build sequence
+3. Wired the new plan into active navigation:
+   - `plans/README.md`
+   - `START_HERE.md`
+   - `plans/PLAN_Coder_Factory.md`
+
+### Checks
+1. Manual read-through confirms the new implementation plan answers the practical question:
+   - what exactly do we build next
+   - in what order
+   - how the runtime layer is attached to the safe rails
+2. No runtime code was changed in this pass.
+
+### Open risks
+1. The implementation plan is now explicit, but the corresponding runtime code and VPS contour still have to be built stage by stage.
+2. Provider routing is intentionally defined as role-based policy first; exact config values will still need a separate implementation pass.
+
+### Review ask
+1. P1 focus: confirm the new plan is concrete enough to drive the next implementation steps for coder factory.
+2. P1 focus: confirm the split between product plan and implementation plan reduces confusion rather than creating another overlapping document.
