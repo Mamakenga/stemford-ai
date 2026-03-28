@@ -1112,3 +1112,28 @@ P2 items: pending
 ### Review ask
 1. P1 focus: confirm the new plan is concrete enough to drive the next implementation steps for coder factory.
 2. P1 focus: confirm the split between product plan and implementation plan reduces confusion rather than creating another overlapping document.
+
+## H-2026-03-28-10
+
+### Changes
+1. Folded the concrete coder-factory implementation steps back into `plans/PLAN_Coder_Factory.md`.
+2. Removed `plans/PLAN_Coder_Factory_Implementation.md` as a separate active document.
+3. Cleaned navigation so coder-factory work now points to one main plan again:
+   - `START_HERE.md`
+   - `plans/README.md`
+
+### Checks
+1. Manual read-through confirms `PLAN_Coder_Factory.md` now contains:
+   - product definition
+   - runtime model
+   - provider routing policy
+   - concrete phased build order
+2. Manual read-through confirms the extra implementation file is no longer referenced from active navigation.
+
+### Open risks
+1. `PLAN_Coder_Factory.md` is now longer, so future edits must preserve section clarity.
+2. Runtime implementation is still ahead of us; this pass only simplified plan structure.
+
+### Review ask
+1. P1 focus: confirm the merged plan is clearer than the previous two-file split.
+2. P1 focus: confirm active navigation now points to one obvious coder-factory source of truth.

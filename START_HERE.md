@@ -24,18 +24,17 @@ Rule:
 2. `AGENTS.md` - AI router and Executor / Reviewer working cycle.
 3. `plans/README.md` - master map of all plans: active canon, archive, reading order.
 4. `plans/PLAN_Coder_Factory.md` - product layer 1: coder factory.
-5. `plans/PLAN_Coder_Factory_Implementation.md` - concrete step-by-step build order for the coder factory.
-6. `plans/PLAN_Business_Control_Plane.md` - product layer 2: business control plane.
-7. `plans/PLAN_Service_Productization.md` - product layer 3: reusable service.
-8. `plans/PLAN_OpenClaw_Control_Plane.md` - technical architecture and reliability rails.
-9. `plans/ROADMAP_OpenClaw_Front_CICD_Back.md` - technical roadmap by stages.
-10. `plans/PLAN_Implementation_Reliability_Kanban.md` - executable implementation phases.
-11. `plans/PLAN_UX_CoderFactory_and_Business_Control.md` - UX canon for the two separate dashboards.
-12. `docs/TASK_STATE_MACHINE.md` - canonical task transitions.
-13. `docs/TECH_INSPECTION_PROTOCOL.md` - real-world inspection and change protocol.
-14. `docs/VPS_CODERS_RUNBOOK.md` - VPS runtime and deployment runbook.
-15. `docs/review/HANDOFF_LOG.md` + `docs/review/DEPLOY_LOG.md` - review and deploy trail.
-16. `OPEN_ISSUES.md` - current open blockers and unresolved items.
+5. `plans/PLAN_Business_Control_Plane.md` - product layer 2: business control plane.
+6. `plans/PLAN_Service_Productization.md` - product layer 3: reusable service.
+7. `plans/PLAN_OpenClaw_Control_Plane.md` - technical architecture and reliability rails.
+8. `plans/ROADMAP_OpenClaw_Front_CICD_Back.md` - technical roadmap by stages.
+9. `plans/PLAN_Implementation_Reliability_Kanban.md` - executable implementation phases.
+10. `plans/PLAN_UX_CoderFactory_and_Business_Control.md` - UX canon for the two separate dashboards.
+11. `docs/TASK_STATE_MACHINE.md` - canonical task transitions.
+12. `docs/TECH_INSPECTION_PROTOCOL.md` - real-world inspection and change protocol.
+13. `docs/VPS_CODERS_RUNBOOK.md` - VPS runtime and deployment runbook.
+14. `docs/review/HANDOFF_LOG.md` + `docs/review/DEPLOY_LOG.md` - review and deploy trail.
+15. `OPEN_ISSUES.md` - current open blockers and unresolved items.
 
 ## The Main Idea
 
@@ -78,7 +77,6 @@ Important:
 
 If the question is "What are we building first?":
 1. `plans/PLAN_Coder_Factory.md`
-2. `plans/PLAN_Coder_Factory_Implementation.md`
 
 If the question is "What comes after the coder factory?":
 1. `plans/PLAN_Business_Control_Plane.md`
@@ -90,7 +88,7 @@ If the question is "How does the safe technical skeleton work?":
 3. `docs/TASK_STATE_MACHINE.md`
 
 If the question is "What exactly do we do next for coder factory?":
-1. `plans/PLAN_Coder_Factory_Implementation.md`
+1. `plans/PLAN_Coder_Factory.md`
 
 If the question is "How should the dashboards behave?":
 1. `plans/PLAN_UX_CoderFactory_and_Business_Control.md`
@@ -115,7 +113,6 @@ If the question is "How do we deploy or inspect the VPS contour?":
 `T2` (open only for the current task):
 1. Product logic:
    - `plans/PLAN_Coder_Factory.md`
-   - `plans/PLAN_Coder_Factory_Implementation.md`
    - `plans/PLAN_Business_Control_Plane.md`
    - `plans/PLAN_Service_Productization.md`
 2. Technical logic:
@@ -138,13 +135,12 @@ If the question is "How do we deploy or inspect the VPS contour?":
 
 Active canon:
 1. `plans/PLAN_Coder_Factory.md`
-2. `plans/PLAN_Coder_Factory_Implementation.md`
-3. `plans/PLAN_Business_Control_Plane.md`
-4. `plans/PLAN_Service_Productization.md`
-5. `plans/PLAN_OpenClaw_Control_Plane.md`
-6. `plans/ROADMAP_OpenClaw_Front_CICD_Back.md`
-7. `plans/PLAN_Implementation_Reliability_Kanban.md`
-8. `plans/PLAN_UX_CoderFactory_and_Business_Control.md`
+2. `plans/PLAN_Business_Control_Plane.md`
+3. `plans/PLAN_Service_Productization.md`
+4. `plans/PLAN_OpenClaw_Control_Plane.md`
+5. `plans/ROADMAP_OpenClaw_Front_CICD_Back.md`
+6. `plans/PLAN_Implementation_Reliability_Kanban.md`
+7. `plans/PLAN_UX_CoderFactory_and_Business_Control.md`
 
 Archive / reference only:
 1. `plans/CONCEPT_Stemford_AI_Deputies_Codex.md`
