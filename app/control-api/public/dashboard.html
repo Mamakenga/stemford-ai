@@ -3,387 +3,363 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Stemford Control Dashboard</title>
+  <title>Stemford Flow Board</title>
   <style>
-    :root {
-      --bg: #f3f5f7;
-      --panel: #ffffff;
-      --line: #d6dde5;
-      --text: #1f2a36;
-      --muted: #607080;
-      --accent: #0062cc;
-      --warn: #a64d00;
-      --bad: #a32626;
-      --ok: #0a6a3f;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "Segoe UI", Tahoma, sans-serif;
-      color: var(--text);
-      background: linear-gradient(140deg, #eef2f7 0%, #f9fafb 100%);
-    }
-    .layout {
-      display: grid;
-      grid-template-columns: 1fr 360px;
-      min-height: 100vh;
-      gap: 12px;
-      padding: 12px;
-    }
-    .main, .side {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      min-width: 0;
-    }
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 10px;
-    }
-    .toolbar {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-    .toolbar input, .toolbar select, .toolbar button, .chat-input input, .chat-input button {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 8px 10px;
-      font-size: 13px;
-      background: #fff;
-    }
-    .toolbar button, .chat-input button {
-      cursor: pointer;
-      background: #f8fbff;
-      border-color: #bdd2ec;
-      color: #0f3e70;
-    }
-    .toolbar button:hover, .chat-input button:hover {
-      background: #edf5ff;
-    }
-    .metrics {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      color: var(--muted);
-      font-size: 12px;
-    }
-    .kanban-wrap {
-      overflow-x: auto;
-      padding-bottom: 4px;
-    }
-    .kanban {
-      display: grid;
-      grid-template-columns: repeat(6, minmax(260px, 1fr));
-      gap: 10px;
-      min-width: 1600px;
-    }
-    .column {
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #fbfcfe;
-      min-height: 420px;
-      padding: 8px;
-    }
-    .column h3 {
-      margin: 4px 0 8px;
-      font-size: 13px;
-      color: #1d3551;
-    }
-    .card {
-      border: 1px solid #d3dfed;
-      border-radius: 10px;
-      background: #fff;
-      padding: 8px;
-      margin-bottom: 8px;
-    }
-    .card h4 {
-      margin: 0 0 6px;
-      font-size: 13px;
-      line-height: 1.3;
-    }
-    .meta {
-      color: var(--muted);
-      font-size: 11px;
-      line-height: 1.4;
-      margin-bottom: 6px;
-      white-space: pre-line;
-    }
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .actions button {
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: #f8faff;
-      font-size: 11px;
-      padding: 4px 6px;
-      cursor: pointer;
-    }
-    .approvals-list, .chat-log {
-      max-height: 280px;
-      overflow: auto;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 8px;
-      background: #fcfdff;
-    }
-    .approval-item, .chat-item {
-      border-bottom: 1px dashed #dbe4ee;
-      padding: 6px 0;
-      font-size: 12px;
-    }
-    .approval-item:last-child, .chat-item:last-child {
-      border-bottom: none;
-    }
-    .chat-item .author {
-      color: #244a72;
-      font-weight: 600;
-    }
-    .chat-item .time {
-      color: var(--muted);
-      font-size: 11px;
-    }
-    .chat-input {
-      margin-top: 8px;
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 8px;
-    }
-    .statusbar {
-      font-size: 12px;
-      color: var(--muted);
-    }
-    .ok { color: var(--ok); }
-    .warn { color: var(--warn); }
-    .bad { color: var(--bad); }
-    @media (max-width: 1100px) {
-      .layout { grid-template-columns: 1fr; }
-      .side { order: -1; }
-    }
+    :root{--bg:#0b1017;--bg2:#121a25;--panel:rgba(18,24,35,.9);--soft:rgba(255,255,255,.04);--line:rgba(255,255,255,.09);--text:#ecf3ff;--muted:#95a8c3;--blue:#39a0ff;--green:#49d17a;--red:#ff7272;--amber:#ffbb64}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:"Segoe UI",Tahoma,sans-serif;color:var(--text);background:radial-gradient(circle at top left,rgba(57,160,255,.16),transparent 26%),radial-gradient(circle at bottom right,rgba(120,88,255,.18),transparent 28%),linear-gradient(180deg,var(--bg),var(--bg2))}
+    .shell{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px;min-height:100vh;padding:18px}
+    .stack{display:flex;flex-direction:column;gap:18px;min-width:0}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:16px;box-shadow:0 22px 80px rgba(0,0,0,.34);backdrop-filter:blur(16px)}
+    .hero{display:grid;gap:14px}.hero-top{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}.hero h1{margin:0;font-size:24px;letter-spacing:-.03em}.hero p{margin:4px 0 0;color:var(--muted);max-width:760px}
+    .toolbar,.metrics,.chips,.actions,.approve-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .toolbar label{display:grid;gap:6px;font-size:12px;color:var(--muted)}
+    input,select,button{font:inherit;border-radius:12px;border:1px solid var(--line);transition:.16s ease}
+    input,select{background:rgba(7,11,18,.82);color:var(--text);padding:10px 12px;min-height:42px}
+    button{cursor:pointer;background:var(--soft);color:var(--text);padding:10px 14px;min-height:42px}
+    button:hover{background:rgba(255,255,255,.09)} button.primary{background:linear-gradient(180deg,#40a5ff,#1b7fe1);border-color:rgba(57,160,255,.44)}
+    .metric{min-width:112px;padding:10px 12px;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.03)} .metric .k{font-size:12px;color:var(--muted)} .metric .v{margin-top:4px;font-size:20px;font-weight:700}
+    .boardwrap{overflow-x:auto}.board{display:grid;grid-template-columns:repeat(4,minmax(250px,1fr));gap:16px;min-width:1080px}
+    .lane{background:rgba(15,21,30,.86);border:1px solid var(--line);border-radius:20px;padding:12px;min-height:620px}
+    .lane-head{display:flex;justify-content:space-between;gap:10px;padding:4px 4px 12px}.lane-title{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:700;letter-spacing:-.03em}.lane-sub{font-size:12px;color:var(--muted)}
+    .dot{width:12px;height:12px;border-radius:999px;box-shadow:0 0 0 3px rgba(255,255,255,.06)} .backlog{background:#bcc7d7}.progress{background:var(--blue)} .review{background:var(--green)} .done{background:#97a5b7}
+    .create{display:flex;justify-content:center;align-items:center;min-height:56px;padding:12px;border:1px dashed rgba(255,255,255,.18);border-radius:16px;background:rgba(255,255,255,.03);cursor:pointer;font-weight:600}
+    .create:hover{background:rgba(57,160,255,.08);border-color:rgba(57,160,255,.45)} .cards{display:flex;flex-direction:column;gap:12px}
+    .card{padding:14px;border:1px solid rgba(255,255,255,.08);border-radius:18px;background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));display:grid;gap:10px;cursor:pointer}
+    .card:hover,.card.selected{border-color:rgba(57,160,255,.4)} .card h3{margin:0;font-size:18px;letter-spacing:-.03em}.sub{color:var(--muted);font-size:14px;line-height:1.45;min-height:38px}
+    .chip{padding:5px 9px;border-radius:999px;font-size:11px;text-transform:uppercase;letter-spacing:.03em;border:1px solid var(--line);color:var(--muted);background:rgba(255,255,255,.03)}
+    .chip.ok{color:#bef2cd;border-color:rgba(73,209,122,.26);background:rgba(73,209,122,.12)} .chip.warn{color:#ffd8a3;border-color:rgba(255,187,100,.26);background:rgba(255,187,100,.12)}
+    .chip.bad{color:#ffb8b8;border-color:rgba(255,114,114,.28);background:rgba(255,114,114,.12)} .chip.blue{color:#d7ebff;border-color:rgba(57,160,255,.28);background:rgba(57,160,255,.12)}
+    .foot{display:flex;justify-content:space-between;align-items:center;gap:8px}.meta{font-size:12px;color:var(--muted)} .main-action{padding:9px 12px;border-radius:12px;border:1px solid rgba(57,160,255,.36);background:rgba(57,160,255,.12);font-weight:600}
+    .main-action[disabled]{opacity:.55;cursor:default}.empty{min-height:120px;border:1px dashed rgba(255,255,255,.08);border-radius:18px;display:grid;place-items:center;color:var(--muted);padding:18px;text-align:center}
+    .side{display:grid;gap:16px;align-content:start}.box{border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.03);padding:12px}.box .k{font-size:12px;color:var(--muted);margin-bottom:6px}.box .v{font-size:14px;line-height:1.45}
+    .detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.list{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:16px;padding:10px;background:rgba(255,255,255,.02)}
+    .item{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px;line-height:1.45}.item:last-child{border-bottom:none}.chat{display:grid;grid-template-columns:1fr auto;gap:10px}
+    .status{font-size:13px;line-height:1.45;color:var(--muted)} .status.ok{color:#b8efc7}.status.warn{color:#ffd8a3}.status.bad{color:#ffb8b8}
+    @media (max-width:1180px){.shell{grid-template-columns:1fr}} @media (max-width:760px){.detail-grid,.chat{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
-  <div class="layout">
-    <section class="main">
-      <div class="panel">
-        <div class="toolbar">
-          <label>Actor role:
-            <select id="actorRole">
-              <option value="orchestrator">orchestrator</option>
-              <option value="strategy">strategy</option>
-              <option value="finance">finance</option>
-              <option value="pmo">pmo</option>
-              <option value="human_telegram">human_telegram</option>
-            </select>
-          </label>
-          <label>Plan:
-            <input id="planFilter" placeholder="optional plan_id" />
-          </label>
-          <button id="btnRefresh">Refresh</button>
-          <button id="btnCreateTask">Create Task</button>
+  <div class="shell">
+    <section class="stack">
+      <div class="panel hero">
+        <div class="hero-top">
+          <div>
+            <h1>Stemford Flow Board</h1>
+            <p>Board for humans, engine for machines. Only four visible stages: Backlog, In Progress, Review, Done.</p>
+          </div>
+          <div class="toolbar">
+            <label>Actor<select id="actorRole"><option value="orchestrator">orchestrator</option><option value="strategy">strategy</option><option value="finance">finance</option><option value="pmo">pmo</option><option value="human_telegram">human_telegram</option></select></label>
+            <label>Plan<input id="planFilter" placeholder="optional plan_id" /></label>
+            <button id="btnRefresh">Refresh</button>
+            <button id="btnCreateTask" class="primary">Create Task</button>
+          </div>
         </div>
         <div class="metrics" id="metrics"></div>
       </div>
-
-      <div class="panel kanban-wrap">
-        <div class="kanban" id="kanban"></div>
-      </div>
+      <div class="boardwrap"><div class="board" id="board"></div></div>
     </section>
 
-    <aside class="side">
-      <div class="panel">
-        <h3>Pending Approvals</h3>
-        <div class="approvals-list" id="approvals"></div>
-      </div>
-      <div class="panel">
-        <h3>Ops Chat</h3>
-        <div class="chat-log" id="chatLog"></div>
-        <div class="chat-input">
-          <input id="chatInput" placeholder="Message to team..." />
-          <button id="chatSend">Send</button>
+    <aside class="stack">
+      <div class="panel side">
+        <section>
+          <h2 id="detailTitle" style="margin:0 0 6px;font-size:20px;letter-spacing:-.03em">Select a task</h2>
+          <div id="detailSub" class="sub" style="min-height:auto">Open a card to see checks, review blockers, gates, and the next recommended action.</div>
+        </section>
+        <div id="detailGrid" class="detail-grid">
+          <div class="box"><div class="k">Next step</div><div class="v">No task selected</div></div>
+          <div class="box"><div class="k">Checks</div><div class="v">-</div></div>
+          <div class="box"><div class="k">Review</div><div class="v">-</div></div>
+          <div class="box"><div class="k">Gates</div><div class="v">-</div></div>
         </div>
+        <div class="actions" id="detailActions"></div>
+
+        <section>
+          <h3 style="margin:0 0 10px;font-size:17px">Review Findings</h3>
+          <div class="list" id="reviewLog">No task selected.</div>
+        </section>
+
+        <section>
+          <h3 style="margin:0 0 10px;font-size:17px">Pending Approvals</h3>
+          <div class="list" id="approvals"></div>
+        </section>
+
+        <section>
+          <h3 style="margin:0 0 10px;font-size:17px">Ops Chat</h3>
+          <div class="list" id="chatLog"></div>
+          <div class="chat" style="margin-top:10px"><input id="chatInput" placeholder="Message to team..." /><button id="chatSend">Send</button></div>
+        </section>
+
+        <div id="status" class="status"></div>
       </div>
-      <div class="panel statusbar" id="status"></div>
     </aside>
   </div>
 
   <script>
-    const columnsOrder = ["Backlog", "Ready", "In Progress", "Review", "Blocked", "Done"];
+    const lanes = ["Backlog", "In Progress", "Review", "Done"];
+    const laneMeta = {
+      "Backlog": { cls: "backlog", sub: "Queued or waiting to start." },
+      "In Progress": { cls: "progress", sub: "Execution is active." },
+      "Review": { cls: "review", sub: "Needs review, fix, or final close." },
+      "Done": { cls: "done", sub: "Accepted work." },
+    };
     const actorRoleEl = document.getElementById("actorRole");
     const planFilterEl = document.getElementById("planFilter");
-    const statusEl = document.getElementById("status");
+    const boardEl = document.getElementById("board");
     const metricsEl = document.getElementById("metrics");
-    const kanbanEl = document.getElementById("kanban");
     const approvalsEl = document.getElementById("approvals");
     const chatLogEl = document.getElementById("chatLog");
     const chatInputEl = document.getElementById("chatInput");
+    const statusEl = document.getElementById("status");
+    const detailTitleEl = document.getElementById("detailTitle");
+    const detailSubEl = document.getElementById("detailSub");
+    const detailGridEl = document.getElementById("detailGrid");
+    const detailActionsEl = document.getElementById("detailActions");
+    const reviewLogEl = document.getElementById("reviewLog");
 
-    function actorRole() {
-      return actorRoleEl.value || "orchestrator";
-    }
+    let tasks = [];
+    let selectedTaskId = null;
 
-    function setStatus(text, kind = "ok") {
-      statusEl.className = `panel statusbar ${kind}`;
-      statusEl.textContent = text;
-    }
+    const actorRole = () => actorRoleEl.value || "orchestrator";
+    const setStatus = (text, kind = "ok") => { statusEl.className = `status ${kind}`; statusEl.textContent = text; };
 
     async function apiGet(url) {
       const r = await fetch(url);
       const data = await r.json().catch(() => null);
-      if (!r.ok || !data || !data.ok) {
-        const msg = data && data.error ? data.error.message : `HTTP ${r.status}`;
-        throw new Error(msg);
-      }
+      if (!r.ok || !data || !data.ok) throw new Error(data && data.error ? data.error.message : `HTTP ${r.status}`);
       return data.data;
     }
 
     async function apiPost(url, body) {
-      const r = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body || {}),
-      });
+      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
       const data = await r.json().catch(() => null);
-      if (!r.ok || !data || !data.ok) {
-        const msg = data && data.error ? data.error.message : `HTTP ${r.status}`;
-        throw new Error(msg);
-      }
+      if (!r.ok || !data || !data.ok) throw new Error(data && data.error ? data.error.message : `HTTP ${r.status}`);
       return data.data;
     }
 
-    function renderCard(card) {
-      const wrap = document.createElement("div");
-      wrap.className = "card";
-      const meta = [
-        `id: ${card.id}`,
-        `status: ${card.status}`,
-        `assignee: ${card.assignee}`,
-        card.plan_id ? `plan: ${card.plan_id} / #${card.plan_step_order || "?"}` : "",
-        `start gate: ${card.start_gate_status || "-"}`,
-        `end gate: ${card.end_gate_status || "-"}`,
-        `checks: ${card.quality && card.quality.total_required ? `${card.quality.total_passed}/${card.quality.total_required}` : "0/0"}`,
-        `review: P1=${card.review ? card.review.open_p1 : 0}, P2=${card.review ? card.review.open_p2 : 0}`,
-      ].filter(Boolean).join("\n");
+    function laneOf(task) {
+      if (task.status === "done") return "Done";
+      if (
+        task.status === "blocked" ||
+        task.status === "failed" ||
+        task.review?.blocking ||
+        task.end_gate_status === "pending" ||
+        task.end_gate_status === "approved"
+      ) return "Review";
+      if (task.status === "in_progress") return "In Progress";
+      return "Backlog";
+    }
 
-      wrap.innerHTML = `
-        <h4>${card.title || "(no title)"}</h4>
-        <div class="meta">${meta}</div>
-      `;
+    function chipsFor(task) {
+      const chips = [];
+      if (task.requires_start_approval) chips.push({ text: task.start_gate_status === "approved" ? "Start gate ok" : task.start_gate_status === "pending" ? "Start gate pending" : "Needs start gate", cls: task.start_gate_status === "approved" ? "ok" : "warn" });
+      if (task.requires_end_approval) chips.push({ text: task.end_gate_status === "approved" ? "Review approved" : task.end_gate_status === "pending" ? "Awaiting review" : "Needs review", cls: task.end_gate_status === "approved" ? "ok" : "blue" });
+      if (task.quality?.total_required > 0) chips.push({ text: `Checks ${task.quality.total_passed}/${task.quality.total_required}`, cls: task.quality.total_passed === task.quality.total_required ? "ok" : "warn" });
+      if (task.review?.open_p1 > 0) chips.push({ text: `P1 ${task.review.open_p1}`, cls: "bad" });
+      else if (task.review?.open_p2 > 0) chips.push({ text: `P2 ${task.review.open_p2}`, cls: "warn" });
+      if (task.status === "blocked") chips.push({ text: "Blocked", cls: "bad" });
+      if (task.status === "failed") chips.push({ text: "Failed", cls: "bad" });
+      return chips.slice(0, 5);
+    }
 
-      const actions = document.createElement("div");
-      actions.className = "actions";
+    function summaryFor(task) {
+      if (task.status === "done") return "Completed.";
+      if (task.review?.blocking) return `${task.review.open_p1} critical blocker${task.review.open_p1 === 1 ? "" : "s"} must be resolved.`;
+      if (task.status === "blocked" || task.status === "failed") return task.status_reason || "Needs attention.";
+      if (task.requires_start_approval && task.start_gate_status !== "approved") return task.start_gate_status === "pending" ? "Waiting for start approval." : "Needs start decision.";
+      if (task.end_gate_status === "pending") return "Waiting for review decision.";
+      if (task.end_gate_status === "approved") return "Review passed. Ready for Done.";
+      if (task.quality?.missing?.length) return `Missing checks: ${task.quality.missing.join(", ")}.`;
+      if (task.status === "in_progress") return "Execution is active.";
+      return "Ready to start.";
+    }
 
-      const addBtn = (label, fn) => {
-        const b = document.createElement("button");
-        b.textContent = label;
-        b.onclick = async () => {
-          try {
-            setStatus(`Working: ${label} for ${card.id}...`, "warn");
-            await fn();
-          } catch (e) {
-            setStatus(`${label} failed for ${card.id}: ${e.message}`, "bad");
-          }
-        };
-        actions.appendChild(b);
-      };
+    function primaryActionFor(task) {
+      if (task.status === "done") return { label: "Done", disabled: true };
+      if (task.status === "blocked" || task.status === "failed") return { label: "Resume", run: () => apiPost(`/tasks/${encodeURIComponent(task.id)}/reopen`, { actor_role: actorRole() }) };
+      if (task.review?.blocking) return { label: "Fix P1", run: () => selectTask(task.id) };
+      if (task.status === "todo" || task.status === "backlog") {
+        if (task.requires_start_approval && task.start_gate_status !== "approved") {
+          if (task.start_gate_status === "pending") return { label: "Awaiting Start", disabled: true };
+          return { label: "Request Start", run: () => apiPost(`/tasks/${encodeURIComponent(task.id)}/gates/start/request`, { requested_by_role: actorRole(), reason: "start gate requested from board" }) };
+        }
+        return { label: "Start", run: () => apiPost(`/tasks/${encodeURIComponent(task.id)}/claim`, { actor_role: actorRole() }) };
+      }
+      if (task.status === "in_progress") {
+        if (task.requires_end_approval && task.end_gate_status !== "approved") {
+          if (task.end_gate_status === "pending") return { label: "Awaiting Review", disabled: true };
+          return { label: "Request Review", run: () => apiPost(`/tasks/${encodeURIComponent(task.id)}/gates/end/request`, { requested_by_role: actorRole(), reason: "end gate requested from board" }) };
+        }
+        if (task.quality?.missing?.length) return { label: "Finish Checks", run: () => selectTask(task.id) };
+        return { label: "Done", run: () => apiPost(`/tasks/${encodeURIComponent(task.id)}/complete`, { actor_role: actorRole(), summary: "done via dashboard" }) };
+      }
+      return { label: "Open", run: () => selectTask(task.id) };
+    }
 
-      addBtn("Open", async () => {
-        const t = await apiGet(`/tasks/${encodeURIComponent(card.id)}`);
-        alert(JSON.stringify(t, null, 2));
+    async function runAction(task, action) {
+      if (!action || action.disabled || !action.run) return;
+      try { setStatus(`Working: ${action.label} for ${task.id}...`, "warn"); await action.run(); await refreshAll(); }
+      catch (e) { setStatus(`${action.label} failed for ${task.id}: ${e.message}`, "bad"); }
+    }
+
+    function metric(label, value) {
+      const el = document.createElement("div");
+      el.className = "metric";
+      el.innerHTML = `<div class="k">${label}</div><div class="v">${value}</div>`;
+      return el;
+    }
+
+    function renderMetrics() {
+      metricsEl.innerHTML = "";
+      const counts = Object.fromEntries(lanes.map((lane) => [lane, tasks.filter((t) => laneOf(t) === lane).length]));
+      const needsAttention = tasks.filter((t) => t.review?.blocking || t.status === "blocked" || t.status === "failed").length;
+      [["Backlog", counts["Backlog"]], ["In Progress", counts["In Progress"]], ["Review", counts["Review"]], ["Done", counts["Done"]], ["Need attention", needsAttention]].forEach(([k, v]) => metricsEl.appendChild(metric(k, v)));
+    }
+
+    function cardFor(task) {
+      const card = document.createElement("article");
+      card.className = `card${selectedTaskId === task.id ? " selected" : ""}`;
+      card.onclick = () => { void selectTask(task.id); };
+      card.innerHTML = `<h3>${task.title || "(no title)"}</h3><div class="sub">${summaryFor(task)}</div>`;
+      const chips = document.createElement("div");
+      chips.className = "chips";
+      chipsFor(task).forEach((chip) => { const el = document.createElement("span"); el.className = `chip ${chip.cls}`; el.textContent = chip.text; chips.appendChild(el); });
+      const foot = document.createElement("div");
+      foot.className = "foot";
+      foot.innerHTML = `<div class="meta">${task.assignee || "-"} | ${task.id}</div>`;
+      const action = primaryActionFor(task);
+      const button = document.createElement("button");
+      button.className = "main-action";
+      button.textContent = action.label;
+      button.disabled = Boolean(action.disabled);
+      button.onclick = (event) => { event.stopPropagation(); void runAction(task, action); };
+      foot.appendChild(button);
+      card.appendChild(chips);
+      card.appendChild(foot);
+      return card;
+    }
+
+    function renderBoard() {
+      boardEl.innerHTML = "";
+      const grouped = Object.fromEntries(lanes.map((lane) => [lane, []]));
+      tasks.forEach((task) => grouped[laneOf(task)].push(task));
+      lanes.forEach((lane) => {
+        const section = document.createElement("section");
+        section.className = "lane";
+        section.innerHTML = `<div class="lane-head"><div><div class="lane-title"><span class="dot ${laneMeta[lane].cls}"></span><span>${lane}</span></div><div class="lane-sub">${laneMeta[lane].sub}</div></div><div class="lane-sub">${grouped[lane].length}</div></div>`;
+        const cards = document.createElement("div");
+        cards.className = "cards";
+        if (lane === "Backlog") {
+          const create = document.createElement("div");
+          create.className = "create";
+          create.textContent = "+ Create task";
+          create.onclick = () => document.getElementById("btnCreateTask").click();
+          cards.appendChild(create);
+        }
+        if (grouped[lane].length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "empty";
+          empty.textContent = lane === "Done" ? "Completed work lands here." : "No tasks in this lane.";
+          cards.appendChild(empty);
+        } else {
+          grouped[lane].forEach((task) => cards.appendChild(cardFor(task)));
+        }
+        section.appendChild(cards);
+        boardEl.appendChild(section);
       });
+    }
 
-      addBtn("Checks", async () => {
-        const current = (card.quality_checks_passed || []).join(", ");
+    function actionButton(label, primary, handler, disabled) {
+      const btn = document.createElement("button");
+      btn.textContent = label;
+      btn.className = primary ? "primary" : "";
+      btn.disabled = Boolean(disabled);
+      btn.onclick = async () => { try { await handler(); } catch (e) { setStatus(`${label} failed: ${e.message}`, "bad"); } };
+      return btn;
+    }
+
+    function renderDetails(task, findings) {
+      if (!task) {
+        detailTitleEl.textContent = "Select a task";
+        detailSubEl.textContent = "Open a card to see checks, review blockers, gates, and the next recommended action.";
+        detailGridEl.innerHTML = `<div class="box"><div class="k">Next step</div><div class="v">No task selected</div></div><div class="box"><div class="k">Checks</div><div class="v">-</div></div><div class="box"><div class="k">Review</div><div class="v">-</div></div><div class="box"><div class="k">Gates</div><div class="v">-</div></div>`;
+        detailActionsEl.innerHTML = "";
+        reviewLogEl.textContent = "No task selected.";
+        return;
+      }
+      const primary = primaryActionFor(task);
+      detailTitleEl.textContent = task.title;
+      detailSubEl.textContent = `${task.assignee || "-"} | ${task.id} | ${summaryFor(task)}`;
+      detailGridEl.innerHTML = `
+        <div class="box"><div class="k">Next step</div><div class="v">${primary.label}</div></div>
+        <div class="box"><div class="k">Checks</div><div class="v">${task.quality.total_passed}/${task.quality.total_required}${task.quality.missing.length ? ` | missing: ${task.quality.missing.join(", ")}` : ""}</div></div>
+        <div class="box"><div class="k">Review</div><div class="v">Open P1: ${task.review.open_p1} | Open P2: ${task.review.open_p2}</div></div>
+        <div class="box"><div class="k">Gates</div><div class="v">Start: ${task.start_gate_status || "not used"} | End: ${task.end_gate_status || "not used"}</div></div>`;
+      detailActionsEl.innerHTML = "";
+      detailActionsEl.appendChild(actionButton(primary.label, true, async () => { await runAction(task, primary); }, primary.disabled));
+      detailActionsEl.appendChild(actionButton("Update Checks", false, async () => {
+        const current = (task.quality_checks_passed || []).join(", ");
         const next = prompt("Passed checks (comma-separated):", current);
         if (next === null) return;
-        await apiPost(`/tasks/${encodeURIComponent(card.id)}/quality-checks`, {
-          actor_role: actorRole(),
-          mode: "replace",
-          passed_checks: next,
-        });
+        await apiPost(`/tasks/${encodeURIComponent(task.id)}/quality-checks`, { actor_role: actorRole(), mode: "replace", passed_checks: next });
         await refreshAll();
-      });
-
-      addBtn("Review", async () => {
+      }));
+      detailActionsEl.appendChild(actionButton("Log Review Issue", false, async () => {
         const severity = (prompt("Severity (p1 or p2):", "p2") || "").trim().toLowerCase();
         if (!severity) return;
         const title = prompt("Review finding title:");
         if (!title) return;
         const details = prompt("Details (optional):") || "";
-        await apiPost(`/tasks/${encodeURIComponent(card.id)}/review-findings`, {
-          actor_role: actorRole(),
-          severity,
-          title,
-          details,
-        });
+        await apiPost(`/tasks/${encodeURIComponent(task.id)}/review-findings`, { actor_role: actorRole(), severity, title, details });
         await refreshAll();
-      });
-
-      addBtn("Start Gate", async () => {
-        await apiPost(`/tasks/${encodeURIComponent(card.id)}/gates/start/request`, {
-          requested_by_role: actorRole(),
-          reason: "start gate requested from dashboard",
-        });
-        await refreshAll();
-      });
-
-      addBtn("Run", async () => {
-        await apiPost(`/tasks/${encodeURIComponent(card.id)}/claim`, { actor_role: actorRole() });
-        await refreshAll();
-      });
-
-      addBtn("End Gate", async () => {
-        await apiPost(`/tasks/${encodeURIComponent(card.id)}/gates/end/request`, {
-          requested_by_role: actorRole(),
-          reason: "end gate requested from dashboard",
-        });
-        await refreshAll();
-      });
-
-      addBtn("Done", async () => {
-        await apiPost(`/tasks/${encodeURIComponent(card.id)}/complete`, {
-          actor_role: actorRole(),
-          summary: "done via dashboard",
-        });
-        await refreshAll();
-      });
-
-      addBtn("Block", async () => {
+      }));
+      detailActionsEl.appendChild(actionButton("Pause", false, async () => {
         const reason = prompt("Block reason:");
         if (!reason) return;
-        await apiPost(`/tasks/${encodeURIComponent(card.id)}/block`, {
-          actor_role: actorRole(),
-          reason,
-        });
+        await apiPost(`/tasks/${encodeURIComponent(task.id)}/block`, { actor_role: actorRole(), reason });
         await refreshAll();
-      });
-
-      addBtn("Reopen", async () => {
-        await apiPost(`/tasks/${encodeURIComponent(card.id)}/reopen`, { actor_role: actorRole() });
+      }));
+      detailActionsEl.appendChild(actionButton("Reopen", false, async () => {
+        await apiPost(`/tasks/${encodeURIComponent(task.id)}/reopen`, { actor_role: actorRole() });
         await refreshAll();
-      });
+      }));
 
-      wrap.appendChild(actions);
-      return wrap;
+      if (!findings.length) {
+        reviewLogEl.textContent = "No review findings yet.";
+        return;
+      }
+      reviewLogEl.innerHTML = "";
+      findings.forEach((finding) => {
+        const row = document.createElement("div");
+        row.className = "item";
+        row.innerHTML = `<div><strong>${String(finding.severity || "").toUpperCase()}</strong> | ${finding.title}</div><div>${finding.details || "No extra details."}</div><div class="meta">${finding.status} | ${finding.created_by_role} | ${finding.created_at || ""}</div>`;
+        if (finding.status === "open") {
+          const resolve = document.createElement("button");
+          resolve.textContent = "Resolve";
+          resolve.style.marginTop = "8px";
+          resolve.onclick = async () => {
+            try {
+              setStatus(`Working: Resolve ${finding.id}...`, "warn");
+              await apiPost(`/review-findings/${encodeURIComponent(finding.id)}/resolve`, { actor_role: actorRole() });
+              await refreshAll();
+            } catch (e) {
+              setStatus(`Resolve failed for ${finding.id}: ${e.message}`, "bad");
+            }
+          };
+          row.appendChild(resolve);
+        }
+        reviewLogEl.appendChild(row);
+      });
     }
 
-    function renderKanban(columns) {
-      kanbanEl.innerHTML = "";
-      for (const name of columnsOrder) {
-        const col = document.createElement("div");
-        col.className = "column";
-        const items = (columns && columns[name]) || [];
-        const h = document.createElement("h3");
-        h.textContent = `${name} (${items.length})`;
-        col.appendChild(h);
-        for (const item of items) col.appendChild(renderCard(item));
-        kanbanEl.appendChild(col);
+    async function selectTask(taskId) {
+      selectedTaskId = taskId;
+      try {
+        const [task, findingsData] = await Promise.all([apiGet(`/tasks/${encodeURIComponent(taskId)}`), apiGet(`/tasks/${encodeURIComponent(taskId)}/review-findings`)]);
+        renderDetails(task, findingsData.items || []);
+        renderBoard();
+      } catch (e) {
+        setStatus(`Open failed for ${taskId}: ${e.message}`, "bad");
       }
     }
 
@@ -393,70 +369,67 @@
         approvalsEl.textContent = "No pending approvals.";
         return;
       }
-
-      for (const a of items) {
-        const d = document.createElement("div");
-        d.className = "approval-item";
-        d.innerHTML = `
-          <div><strong>${a.approval_id}</strong></div>
-          <div>${a.action_class} | ${a.entity_type}:${a.entity_id}</div>
-          <div>requested by ${a.requested_by_role}, approver ${a.approver_role}</div>
-        `;
-
+      items.forEach((approval) => {
         const row = document.createElement("div");
-        row.className = "actions";
-        const approveBtn = document.createElement("button");
-        approveBtn.textContent = "Approve";
-        approveBtn.onclick = async () => {
-          await apiPost("/approvals/decide", {
-            approval_id: a.approval_id,
-            decision: "approved",
-            decided_by_role: actorRole(),
-            reason: "approved from dashboard",
-          });
-          await refreshAll();
+        row.className = "item";
+        row.innerHTML = `<div><strong>${approval.action_class}</strong> | ${approval.entity_type}:${approval.entity_id}</div><div class="meta">requested by ${approval.requested_by_role} | approver ${approval.approver_role}</div>`;
+        const actions = document.createElement("div");
+        actions.className = "approve-actions";
+        const approve = document.createElement("button");
+        approve.textContent = "Approve";
+        approve.onclick = async () => {
+          try {
+            setStatus(`Working: Approve ${approval.approval_id}...`, "warn");
+            await apiPost("/approvals/decide", { approval_id: approval.approval_id, decision: "approved", decided_by_role: actorRole(), reason: "approved from board" });
+            await refreshAll();
+          } catch (e) {
+            setStatus(`Approve failed for ${approval.approval_id}: ${e.message}`, "bad");
+          }
         };
-        const rejectBtn = document.createElement("button");
-        rejectBtn.textContent = "Reject";
-        rejectBtn.onclick = async () => {
-          const reason = prompt("Reject reason:") || "rejected from dashboard";
-          await apiPost("/approvals/decide", {
-            approval_id: a.approval_id,
-            decision: "rejected",
-            decided_by_role: actorRole(),
-            reason,
-          });
-          await refreshAll();
+        const reject = document.createElement("button");
+        reject.textContent = "Reject";
+        reject.onclick = async () => {
+          const reason = prompt("Reject reason:") || "rejected from board";
+          try {
+            setStatus(`Working: Reject ${approval.approval_id}...`, "warn");
+            await apiPost("/approvals/decide", { approval_id: approval.approval_id, decision: "rejected", decided_by_role: actorRole(), reason });
+            await refreshAll();
+          } catch (e) {
+            setStatus(`Reject failed for ${approval.approval_id}: ${e.message}`, "bad");
+          }
         };
-        row.appendChild(approveBtn);
-        row.appendChild(rejectBtn);
-        d.appendChild(row);
-        approvalsEl.appendChild(d);
-      }
+        actions.appendChild(approve);
+        actions.appendChild(reject);
+        row.appendChild(actions);
+        approvalsEl.appendChild(row);
+      });
     }
 
     function renderChat(items) {
       chatLogEl.innerHTML = "";
-      for (const m of items) {
-        const d = document.createElement("div");
-        d.className = "chat-item";
-        d.innerHTML = `
-          <div><span class="author">${m.author_role}</span> ${m.task_id ? `(task ${m.task_id})` : ""}</div>
-          <div>${m.message}</div>
-          <div class="time">${m.created_at || ""}</div>
-        `;
-        chatLogEl.appendChild(d);
-      }
+      items.forEach((message) => {
+        const row = document.createElement("div");
+        row.className = "item";
+        row.innerHTML = `<div><strong>${message.author_role}</strong> ${message.task_id ? `(task ${message.task_id})` : ""}</div><div>${message.message}</div><div class="meta">${message.created_at || ""}</div>`;
+        chatLogEl.appendChild(row);
+      });
       chatLogEl.scrollTop = chatLogEl.scrollHeight;
     }
 
     async function refreshBoard() {
-      const params = new URLSearchParams({ view: "kanban" });
+      const params = new URLSearchParams();
       if (planFilterEl.value.trim()) params.set("plan_id", planFilterEl.value.trim());
-      const data = await apiGet(`/tasks?${params.toString()}`);
-      renderKanban(data.columns || {});
-      const total = columnsOrder.reduce((sum, k) => sum + ((data.columns && data.columns[k] ? data.columns[k].length : 0)), 0);
-      metricsEl.textContent = `Tasks in board: ${total}`;
+      const suffix = params.toString() ? `?${params.toString()}` : "";
+      const data = await apiGet(`/tasks${suffix}`);
+      tasks = data.tasks || [];
+      renderMetrics();
+      renderBoard();
+      if (selectedTaskId && tasks.some((task) => task.id === selectedTaskId)) {
+        await selectTask(selectedTaskId);
+      } else {
+        selectedTaskId = null;
+        renderDetails(null, []);
+      }
     }
 
     async function refreshApprovals() {
@@ -474,11 +447,11 @@
         await Promise.all([refreshBoard(), refreshApprovals(), refreshChat()]);
         setStatus(`Updated at ${new Date().toLocaleTimeString()}`, "ok");
       } catch (e) {
-        setStatus(`Error: ${e.message}`, "bad");
+        setStatus(`Refresh failed: ${e.message}`, "bad");
       }
     }
 
-    document.getElementById("btnRefresh").onclick = refreshAll;
+    document.getElementById("btnRefresh").onclick = () => { void refreshAll(); };
     document.getElementById("btnCreateTask").onclick = async () => {
       try {
         const title = prompt("Task title:");
@@ -490,43 +463,28 @@
         const requiresStart = confirm("Require START approval?");
         const requiresEnd = confirm("Require END approval?");
         const qualityChecksRaw = prompt("Quality checks (comma-separated):", "result_summary") || "result_summary";
-        await apiPost("/tasks", {
-          title,
-          primary_goal_id: goal,
-          assignee,
-          actor_role: actorRole(),
-          plan_id: planId || null,
-          plan_step_order: stepOrderRaw ? Number(stepOrderRaw) : null,
-          requires_start_approval: requiresStart,
-          requires_end_approval: requiresEnd,
-          quality_checks_required: qualityChecksRaw,
-        });
+        const created = await apiPost("/tasks", { title, primary_goal_id: goal, assignee, actor_role: actorRole(), plan_id: planId || null, plan_step_order: stepOrderRaw ? Number(stepOrderRaw) : null, requires_start_approval: requiresStart, requires_end_approval: requiresEnd, quality_checks_required: qualityChecksRaw });
         await refreshAll();
+        if (created && created.id) await selectTask(created.id);
       } catch (e) {
-        setStatus(`Create task error: ${e.message}`, "bad");
+        setStatus(`Create task failed: ${e.message}`, "bad");
       }
     };
-
     document.getElementById("chatSend").onclick = async () => {
-      const msg = chatInputEl.value.trim();
-      if (!msg) return;
+      const message = chatInputEl.value.trim();
+      if (!message) return;
       try {
-        await apiPost("/chat/messages", {
-          actor_role: actorRole(),
-          message: msg,
-        });
+        await apiPost("/chat/messages", { actor_role: actorRole(), message, task_id: selectedTaskId || undefined });
         chatInputEl.value = "";
         await refreshChat();
       } catch (e) {
-        setStatus(`Chat error: ${e.message}`, "bad");
+        setStatus(`Chat failed: ${e.message}`, "bad");
       }
     };
-
-    actorRoleEl.onchange = refreshAll;
-    planFilterEl.onchange = refreshAll;
-
-    refreshAll();
-    setInterval(refreshAll, 5000);
+    actorRoleEl.onchange = () => void refreshAll();
+    planFilterEl.onchange = () => void refreshAll();
+    void refreshAll();
+    setInterval(() => { void refreshAll(); }, 5000);
   </script>
 </body>
 </html>

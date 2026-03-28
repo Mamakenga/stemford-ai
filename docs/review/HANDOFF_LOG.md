@@ -866,3 +866,39 @@ Review ask:
 Verdict: pending
 P1 items: pending
 P2 items: pending
+
+---
+
+## H-2026-03-28-03
+Role: Codex=Executor
+Scope: Human-first dashboard redesign (4-stage flow board with Review -> Done path)
+Commits: pending
+Changes:
+- Rebuilt `app/control-api/public/dashboard.html` into a simplified flow board:
+  - visible stages reduced to `Backlog`, `In Progress`, `Review`, `Done`
+  - one primary action per card instead of many technical buttons
+  - details moved into the right-side task panel
+- Preserved reliability logic under the hood while hiding machine-level controls from the main board:
+  - gates, checks, review blockers, approvals and chat still exist
+  - they are now surfaced as compact chips and detail-panel actions
+- Adjusted lane behavior so a task that already passed end review stays in `Review` until the final `Done` action:
+  - this makes the visible flow match the intended human process `Backlog -> In Progress -> Review -> Done`
+- Renamed detail-panel actions to more human labels:
+  - `Checks` -> `Update Checks`
+  - `Add Review` -> `Log Review Issue`
+  - `Block` -> `Pause`
+Checks:
+- Static contract check against `app/control-api/server.js`:
+  - confirmed `/tasks`, `/tasks/:id`, `/tasks/:id/quality-checks`, `/tasks/:id/review-findings`, `/review-findings/:id/resolve`, `/approvals/pending`, `/approvals/decide`, `/chat/messages`
+  - confirmed `/tasks` default payload includes `tasks[]` with `quality` and `review` summary required by the new board
+- Manual diff review completed for board lane mapping and `Review -> Done` behavior.
+Open risks:
+- No browser smoke yet on VPS for the redesigned board.
+- Task creation still uses prompt windows; a proper inline composer is still a follow-up.
+- Detail panel is human-friendlier now, but still operational rather than polished product UX.
+Review ask:
+- Focus on whether the simplified board now matches the intended manager workflow better than the old multi-button cards.
+- Check the `Review -> Done` path and whether any hidden action became inaccessible.
+Verdict: pending
+P1 items: pending
+P2 items: pending
