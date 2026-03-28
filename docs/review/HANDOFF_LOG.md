@@ -1335,3 +1335,24 @@ P2 items: pending
 ### Review ask
 1. P1 focus: confirm the task-to-run bridge is the right first dispatch shape before automatic orchestrator wiring.
 2. P1 focus: confirm duplicate-run blocking by `(task_id, stage_id, role, pending/running)` is strict enough for the next step.
+
+## H-2026-03-28-18
+
+### Changes
+1. Fixed the XSS path found in the new coder-factory run log for commit `df5946c`.
+2. Replaced unsafe `innerHTML` rendering for task role runs with safe DOM construction in `coder_factory.html`.
+3. Trimmed extra blank lines at the end of `server.js` to reduce diff noise.
+4. Recorded a concrete follow-up from review:
+   - add an index for `(run_contract->>'task_id', run_contract->>'stage_id')` on active runs in a later migration
+
+### Checks
+1. `node --check app/control-api/server.js` passes.
+2. Extracted script from `app/control-api/public/coder_factory.html` passes `node --check`.
+
+### Open risks
+1. `coder_factory.html` still has older `innerHTML` paths outside the new role-run block; this pass only closed the newly introduced XSS vector.
+2. Task-scoped active-run lookup still uses JSONB extraction without a dedicated index; acceptable for now, but now explicitly queued as the next performance-hardening follow-up.
+
+### Review ask
+1. P1 focus: confirm the new role-run block no longer renders task-derived stage data through `innerHTML`.
+2. P1 focus: confirm the JSONB index should be handled as the next migration rather than bundled into this XSS fix.

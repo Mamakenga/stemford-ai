@@ -561,7 +561,22 @@
           const row = document.createElement("div");
           row.className = "task-item";
           const stage = run.run_contract && run.run_contract.stage_id ? run.run_contract.stage_id : "-";
-          row.innerHTML = `<div><span class="author">${run.role}</span> | ${run.status}</div><div>stage: ${stage}</div><div class="small">${run.id} | ${run.created_at || ""}</div>`;
+          const head = document.createElement("div");
+          const author = document.createElement("span");
+          author.className = "author";
+          author.textContent = String(run.role || "");
+          head.appendChild(author);
+          head.appendChild(document.createTextNode(` | ${String(run.status || "")}`));
+          row.appendChild(head);
+
+          const stageLine = document.createElement("div");
+          stageLine.textContent = `stage: ${stage}`;
+          row.appendChild(stageLine);
+
+          const meta = document.createElement("div");
+          meta.className = "small";
+          meta.textContent = `${String(run.id || "")} | ${String(run.created_at || "")}`;
+          row.appendChild(meta);
           runLogEl.appendChild(row);
         });
       }
