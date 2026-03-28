@@ -16,6 +16,7 @@
 9. `CONTEXT_Main.md` + `plans/*` + `refs/*` — бизнес-контекст, планы и справочные материалы.
 10. `plans/ROADMAP_OpenClaw_Front_CICD_Back.md` — дорожная карта целевой системы OpenClaw-front + CI/CD-back с детальной реализацией Kanban Task Board.
 11. `plans/PLAN_Implementation_Reliability_Kanban.md` — исполняемый план внедрения reliability-first контура и веб-пульта Kanban.
+12. `plans/PLAN_UX_CoderFactory_and_Business_Control.md` — каноника UX и логики взаимодействия: отдельно для фабрики кодеров и отдельно для бизнес-контура.
 
 Этот файл — универсальная точка входа для **любой** AI-модели в этом проекте.
 
@@ -59,6 +60,7 @@
    - `plans/PLAN_OpenClaw_Control_Plane.md` — дорожная карта реализации control-plane для "отдела из джарвисов" на базе OpenClaw.
    - `plans/ROADMAP_OpenClaw_Front_CICD_Back.md` — целевая дорожная карта OpenClaw-front + CI/CD-back (включая Kanban Task Board и UX-протокол Start/End).
    - `plans/PLAN_Implementation_Reliability_Kanban.md` — детальный исполняемый план внедрения (фазы A-F).
+   - `plans/PLAN_UX_CoderFactory_and_Business_Control.md` — UX blueprint для двух отдельных пультов: `Coder Factory Dashboard` и `Business Dashboard`.
    - `CHECKLIST_Paperclip_MVP.md` — контрольный список запуска.
    - `runtime/orchestration/PLAYBOOK_FRANCHISE_EXIT_REPOSITIONING.md` — runbook запуска агентного контура для этапа A.
    - `docs for human/Как запустить комплекс Репозиционирование (A).md` — краткая human-инструкция по запуску.

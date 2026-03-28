@@ -124,12 +124,14 @@ DoD:
 
 Детальный пошаговый план исполнения вынесен в:
 1. `plans/PLAN_Implementation_Reliability_Kanban.md`
+2. `plans/PLAN_UX_CoderFactory_and_Business_Control.md`
 
 Связка roadmap -> execution:
 1. E0-E1 = Фазы A-B (state machine + gate + quality checklist).
 2. E2 = Фазы C-D (review discipline + task isolation).
 3. E3-E4 = Фаза E (web-пульт и управляемый multi-agent процесс).
 4. E5 = Фаза F (операционная надежность и эксплуатация).
+5. UX-логика и разделение coder/business dashboard зафиксированы в отдельном UX blueprint.
 
 ## 5) Формальные критерии SUCCESS
 
@@ -177,6 +179,7 @@ High-risk включает:
 Важная фиксация:
 1. Ниже описан прежде всего `Coder Dashboard`.
 2. `Business Dashboard` появляется после стабилизации E4 и использует тот же engine, но другой UX-слой.
+3. Подробный UX-контракт вынесен в `plans/PLAN_UX_CoderFactory_and_Business_Control.md`.
 
 ## Колонки
 

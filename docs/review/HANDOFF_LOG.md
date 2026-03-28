@@ -952,3 +952,36 @@ Review ask:
 Verdict: pending
 P1 items: pending
 P2 items: pending
+
+---
+
+## H-2026-03-28-05
+Role: Codex=Executor
+Scope: Canonical UX blueprint for separate coder-factory and business dashboards
+Commits: pending
+Changes:
+- Added new UX plan:
+  - `plans/PLAN_UX_CoderFactory_and_Business_Control.md`
+- The plan now explicitly fixes:
+  - shared engine, separate dashboards
+  - owner talks only to orchestrator in coder factory
+  - left-side human-readable plan with checkboxes
+  - coder role columns `executor / reviewer / deployer`
+  - decision inbox + task detail tabs `Summary / Discussion / Artifacts`
+  - separate business dashboard with business stages and no engineering noise
+- Linked the new UX plan into canonical navigation:
+  - `START_HERE.md`
+  - `plans/PLAN_OpenClaw_Control_Plane.md`
+  - `plans/ROADMAP_OpenClaw_Front_CICD_Back.md`
+  - `plans/PLAN_Implementation_Reliability_Kanban.md`
+Checks:
+- Verified by `Select-String` that the new UX plan is referenced from all required route files.
+- Manual read-through confirms the split between coder factory and business control plane is now explicit and detailed.
+Open risks:
+- Current dashboard implementation still needs to be aligned with this new UX blueprint.
+- There is still in-progress code for a separate coder page that must be reviewed against the new canonical UX plan before merge.
+Review ask:
+- Validate that the new UX plan is complete enough to serve as the single source of truth for future dashboard work.
+Verdict: pending
+P1 items: pending
+P2 items: pending

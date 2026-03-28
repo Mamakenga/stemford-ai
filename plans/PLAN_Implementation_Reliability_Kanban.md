@@ -26,6 +26,7 @@
 2. Под `Coder Factory` понимаем контур с ролями `executor / reviewer / deployer` и обязательными Start/End согласованиями владельца на этапах.
 3. `Business Dashboard` для управляющего Stemford — это следующий слой, который делается уже после стабилизации coder factory.
 4. Любая текущая работа по kanban/web UX должна отвечать вопросу: помогает ли это видеть и управлять pipeline `executor -> reviewer -> deployer`.
+5. Подробный UX blueprint зафиксирован в `plans/PLAN_UX_CoderFactory_and_Business_Control.md`.
 
 Практический смысл:
 1. Сначала делаем систему, которая надежно делает код и деплой.
@@ -154,6 +155,7 @@
 - `reviewer`
 - `deployer`
 3. Business-oriented kanban для управляющего — следующий контур, а не замена coder dashboard.
+4. Точная логика общения owner <-> orchestrator и split между coder/business UX вынесены в отдельный UX-план.
 
 Зачем:
 1. Управление становится человеческим, а не только командным.
