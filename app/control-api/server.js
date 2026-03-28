@@ -128,6 +128,24 @@ function normalizeStringArray(raw) {
   return normalized;
 }
 
+function normalizeTextArray(raw) {
+  const items = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? raw.split(",")
+      : [];
+  const normalized = [];
+  const seen = new Set();
+  for (const item of items) {
+    const value = String(item || "").trim();
+    const dedupeKey = value.toLowerCase();
+    if (!value || seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    normalized.push(value);
+  }
+  return normalized;
+}
+
 function escapeLikePattern(raw) {
   return String(raw || "").replace(/[\\%_]/g, "\\$&");
 }
@@ -140,12 +158,53 @@ function includesSensitiveMarkers(text) {
 function normalizeTaskRowForView(row) {
   const quality_checks_required = normalizeStringArray(row.quality_checks_required);
   const quality_checks_passed = normalizeStringArray(row.quality_checks_passed);
+  const task_contract = normalizeTaskContract(row.task_contract, {
+    title: row.title,
+    required_checks: quality_checks_required,
+  });
   return {
     ...row,
     requires_start_approval: Boolean(row.requires_start_approval),
     requires_end_approval: Boolean(row.requires_end_approval),
     quality_checks_required,
     quality_checks_passed,
+    task_contract,
+  };
+}
+
+function normalizeTaskContract(raw, fallback = {}) {
+  const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const title = String(fallback.title || "").trim();
+  const requiredChecks = normalizeStringArray(source.required_checks || fallback.required_checks || []);
+  const risk = String(source.risk_level || fallback.risk_level || "medium").trim().toLowerCase();
+  const risk_level = ["low", "medium", "high"].includes(risk) ? risk : "medium";
+  const goal = String(source.goal || title || "").trim();
+  const scope = String(
+    source.scope ||
+    fallback.scope ||
+    (title ? `Implement only the requested change for: ${title}` : "")
+  ).trim();
+  const stage_summary = String(
+    source.stage_summary ||
+    fallback.stage_summary ||
+    (title ? `Initial task contract for "${title}"` : "")
+  ).trim();
+
+  return {
+    goal,
+    scope,
+    forbidden_changes: normalizeTextArray(source.forbidden_changes || fallback.forbidden_changes || []),
+    definition_of_done: normalizeTextArray(
+      source.definition_of_done ||
+      fallback.definition_of_done || [
+        "Requested change is implemented",
+        "Result is visible in the relevant API or interface",
+        "No critical review blockers remain",
+      ]
+    ),
+    required_checks: requiredChecks,
+    risk_level,
+    stage_summary,
   };
 }
 
@@ -528,6 +587,7 @@ app.get("/tasks", async (req, res) => {
     select id,title,primary_goal_id,status,assignee,due_at,retry_attempt,retry_after,
            plan_id,plan_step_order,
            requires_start_approval,requires_end_approval,
+           task_contract,
            quality_checks_required,quality_checks_passed,
            start_gate_approval_id,start_gate_status,
            end_gate_approval_id,end_gate_status,
@@ -564,7 +624,7 @@ app.get("/tasks", async (req, res) => {
     const msg = String(e?.message || "");
     const missingExtendedColumn =
       e?.code === "42703" &&
-      /retry_attempt|retry_after|plan_id|plan_step_order|requires_start_approval|requires_end_approval|quality_checks_required|quality_checks_passed|start_gate_approval_id|start_gate_status|end_gate_approval_id|end_gate_status|claimed_by|claimed_at|completed_at|status_reason/i.test(msg);
+      /retry_attempt|retry_after|plan_id|plan_step_order|requires_start_approval|requires_end_approval|task_contract|quality_checks_required|quality_checks_passed|start_gate_approval_id|start_gate_status|end_gate_approval_id|end_gate_status|claimed_by|claimed_at|completed_at|status_reason/i.test(msg);
     if (missingExtendedColumn) {
       try {
         const qLegacy = await pool.query(legacySql, vals);
@@ -576,6 +636,7 @@ app.get("/tasks", async (req, res) => {
           plan_step_order: null,
           requires_start_approval: false,
           requires_end_approval: false,
+          task_contract: {},
           quality_checks_required: [],
           quality_checks_passed: [],
           review_open_p1: 0,
@@ -621,6 +682,7 @@ app.get("/tasks/:id", async (req, res) => {
       `select id,title,primary_goal_id,status,assignee,due_at,retry_attempt,retry_after,
               plan_id,plan_step_order,
               requires_start_approval,requires_end_approval,
+              task_contract,
               quality_checks_required,quality_checks_passed,
               start_gate_approval_id,start_gate_status,
               end_gate_approval_id,end_gate_status,
@@ -643,7 +705,7 @@ app.get("/tasks/:id", async (req, res) => {
     const msg = String(e?.message || "");
     const missingExtendedColumn =
       e?.code === "42703" &&
-      /retry_attempt|retry_after|plan_id|plan_step_order|requires_start_approval|requires_end_approval|quality_checks_required|quality_checks_passed|start_gate_approval_id|start_gate_status|end_gate_approval_id|end_gate_status|claimed_by|claimed_at|completed_at|status_reason/i.test(msg);
+      /retry_attempt|retry_after|plan_id|plan_step_order|requires_start_approval|requires_end_approval|task_contract|quality_checks_required|quality_checks_passed|start_gate_approval_id|start_gate_status|end_gate_approval_id|end_gate_status|claimed_by|claimed_at|completed_at|status_reason/i.test(msg);
     if (!missingExtendedColumn) return fail(res, 500, "task_query_failed", e.message);
 
     try {
@@ -662,6 +724,7 @@ app.get("/tasks/:id", async (req, res) => {
         plan_step_order: null,
         requires_start_approval: false,
         requires_end_approval: false,
+        task_contract: {},
         quality_checks_required: [],
         quality_checks_passed: [],
         review_open_p1: 0,
@@ -1535,6 +1598,7 @@ app.post("/tasks", async (req, res) => {
     requires_start_approval,
     requires_end_approval,
     quality_checks_required,
+    task_contract,
   } = req.body || {};
 
   if (!title || !primary_goal_id || !assignee || !actor_role) {
@@ -1553,6 +1617,10 @@ app.post("/tasks", async (req, res) => {
   const requiredChecks = normalizeStringArray(
     quality_checks_required == null ? ["result_summary"] : quality_checks_required
   );
+  const normalizedTaskContract = normalizeTaskContract(task_contract, {
+    title,
+    required_checks: requiredChecks,
+  });
   {
     const allowed = await requireToolAccess(
       res,
@@ -1570,13 +1638,15 @@ app.post("/tasks", async (req, res) => {
          id,title,primary_goal_id,status,assignee,due_at,
          plan_id,plan_step_order,
          requires_start_approval,requires_end_approval,
+         task_contract,
          quality_checks_required,quality_checks_passed,
          start_gate_status,end_gate_status
        )
-       values ($1,$2,$3,'todo',$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13)
+       values ($1,$2,$3,'todo',$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14)
        returning id,title,primary_goal_id,status,assignee,due_at,
                  plan_id,plan_step_order,
                  requires_start_approval,requires_end_approval,
+                 task_contract,
                  quality_checks_required,quality_checks_passed,
                  start_gate_approval_id,start_gate_status,end_gate_approval_id,end_gate_status`,
       [
@@ -1589,6 +1659,7 @@ app.post("/tasks", async (req, res) => {
         effectivePlanStepOrder,
         requireStart,
         requireEnd,
+        JSON.stringify(normalizedTaskContract),
         JSON.stringify(requiredChecks),
         JSON.stringify([]),
         requireStart ? "pending" : null,
@@ -1605,6 +1676,7 @@ app.post("/tasks", async (req, res) => {
       plan_step_order: row.plan_step_order,
       requires_start_approval: row.requires_start_approval,
       requires_end_approval: row.requires_end_approval,
+      task_contract: row.task_contract,
       quality_checks_required: row.quality_checks_required,
     });
 

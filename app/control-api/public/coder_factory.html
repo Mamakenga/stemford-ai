@@ -494,11 +494,16 @@
       detailTitleEl.textContent = task.title || task.id;
       detailRoleEl.textContent = `${task.assignee || "-"} / ${stageLabel(task)}`;
 
+      const contract = task.task_contract || {};
       const boxes = [
         ["Plan step", `${task.plan_id || "-"} / step ${task.plan_step_order || "-"}`],
+        ["Goal", contract.goal || "-"],
+        ["Scope", contract.scope || "-"],
         ["Owner ask", nextOwnerAsk(task)],
         ["Checks", task.quality ? `${task.quality.total_passed}/${task.quality.total_required}${task.quality.missing.length ? ` | missing: ${task.quality.missing.join(", ")}` : ""}` : "-"],
         ["Review", task.review ? `P1: ${task.review.open_p1} | P2: ${task.review.open_p2}` : "-"],
+        ["DoD", (contract.definition_of_done || []).length ? contract.definition_of_done.join("; ") : "-"],
+        ["Do not change", (contract.forbidden_changes || []).length ? contract.forbidden_changes.join("; ") : "-"],
       ];
       boxes.forEach(([k, v]) => {
         const box = document.createElement("div");

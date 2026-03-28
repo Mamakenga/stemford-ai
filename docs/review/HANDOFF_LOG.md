@@ -1171,3 +1171,38 @@ P2 items: pending
 ### Review ask
 1. P1 focus: confirm the plan is now explicit enough about why the roles are real subagents and not just skills of one bot.
 2. P1 focus: confirm the OpenClaw-readiness statement is honest and not overstating current implementation maturity.
+
+## H-2026-03-28-12
+
+### Changes
+1. Added task-contract persistence for coder-factory work:
+   - new migration `014_task_contract.sql`
+   - new `task_contract` field on tasks
+2. Added server-side normalization for a formal task contract:
+   - `goal`
+   - `scope`
+   - `forbidden_changes`
+   - `definition_of_done`
+   - `required_checks`
+   - `risk_level`
+   - `stage_summary`
+3. Updated task read endpoints so every task now returns a normalized contract even when older rows have incomplete data.
+4. Surfaced the task contract in both dashboards:
+   - coder factory details
+   - standard dashboard task details
+
+### Checks
+1. Fixed the SQL placeholder count in task creation after adding `task_contract`.
+2. `node --check app/control-api/server.js` passes.
+3. Manual diff review confirms the first implementation step stays additive:
+   - create/read path updated
+   - no runtime dispatch logic changed yet
+
+### Open risks
+1. This step stores and exposes the contract, but there is not yet a dedicated update flow for orchestrator-driven contract refinement.
+2. The new contract is not yet wired into separate executor/reviewer/deployer runs; that remains the next layer.
+3. Migration has not yet been applied on VPS in this pass.
+
+### Review ask
+1. P1 focus: confirm the contract shape is strict enough to become the handoff payload for role runs.
+2. P1 focus: confirm default contract generation from task title is acceptable for the first live version.
