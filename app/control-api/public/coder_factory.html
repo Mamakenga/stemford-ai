@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stemford Coder Factory</title>
+  <style>
+    :root{--bg:#09111a;--bg2:#101c2b;--panel:rgba(15,23,36,.92);--soft:rgba(255,255,255,.04);--line:rgba(255,255,255,.08);--text:#edf4ff;--muted:#94a8c4;--blue:#3e9cff;--green:#53d685;--amber:#ffbf69;--red:#ff7878;--violet:#8c8cff}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:"Segoe UI",Tahoma,sans-serif;color:var(--text);background:radial-gradient(circle at top left,rgba(62,156,255,.16),transparent 26%),radial-gradient(circle at bottom right,rgba(140,140,255,.14),transparent 24%),linear-gradient(180deg,var(--bg),var(--bg2))}
+    button,input{font:inherit}
+    button,input{border-radius:12px;border:1px solid var(--line)}
+    button{cursor:pointer;background:var(--soft);color:var(--text);padding:10px 14px}
+    button:hover{background:rgba(255,255,255,.08)}
+    input{background:rgba(5,10,18,.78);color:var(--text);padding:10px 12px}
+    .page{display:grid;grid-template-rows:auto 1fr;gap:16px;min-height:100vh;padding:18px}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:16px;box-shadow:0 24px 80px rgba(0,0,0,.34);backdrop-filter:blur(16px)}
+    .hero{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
+    .hero h1{margin:0;font-size:28px;letter-spacing:-.03em}
+    .hero p{margin:6px 0 0;color:var(--muted);max-width:760px}
+    .toolbar,.metrics,.chips,.actions,.decision-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .toolbar label{display:grid;gap:6px;font-size:12px;color:var(--muted)}
+    .metrics{margin-top:14px}
+    .metric{min-width:120px;padding:10px 12px;border-radius:16px;background:rgba(255,255,255,.03);border:1px solid var(--line)}
+    .metric .k{font-size:12px;color:var(--muted)}
+    .metric .v{margin-top:4px;font-size:22px;font-weight:700}
+    .workspace{display:grid;grid-template-columns:320px minmax(0,1fr) 380px;gap:16px;min-height:0}
+    .plan-shell,.side-shell{display:grid;gap:16px;align-content:start}
+    .plan-head,.board-head,.section-head{display:flex;justify-content:space-between;gap:10px;align-items:center}
+    .plan-list,.chat-log,.task-log,.decision-list{border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.02);padding:10px;overflow:auto}
+    .plan-list{max-height:calc(100vh - 280px)}
+    .plan-item{display:grid;grid-template-columns:auto 1fr;gap:12px;padding:12px;border-bottom:1px solid rgba(255,255,255,.06)}
+    .plan-item:last-child{border-bottom:none}
+    .plan-item input{margin-top:3px}
+    .plan-item.active{background:rgba(62,156,255,.08);border-radius:14px}
+    .plan-title{font-weight:600;line-height:1.35}
+    .plan-meta{margin-top:6px;font-size:12px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;border:1px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);background:rgba(255,255,255,.03)}
+    .badge.ok{color:#bdf1cb;border-color:rgba(83,214,133,.28);background:rgba(83,214,133,.12)}
+    .badge.warn{color:#ffd9a3;border-color:rgba(255,191,105,.28);background:rgba(255,191,105,.12)}
+    .badge.bad{color:#ffc2c2;border-color:rgba(255,120,120,.28);background:rgba(255,120,120,.12)}
+    .badge.info{color:#dbe9ff;border-color:rgba(62,156,255,.28);background:rgba(62,156,255,.12)}
+    .board{display:grid;grid-template-columns:repeat(3,minmax(250px,1fr));gap:16px;min-width:820px}
+    .board-wrap{overflow:auto}
+    .lane{border:1px solid var(--line);border-radius:20px;background:rgba(255,255,255,.02);padding:12px;min-height:680px}
+    .lane-title{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:700;letter-spacing:-.03em}
+    .lane-sub{font-size:12px;color:var(--muted)}
+    .dot{width:12px;height:12px;border-radius:999px;box-shadow:0 0 0 3px rgba(255,255,255,.05)}
+    .executor{background:var(--blue)} .reviewer{background:var(--amber)} .deployer{background:var(--green)}
+    .cards{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+    .card{display:grid;gap:10px;padding:14px;border-radius:18px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.025));border:1px solid rgba(255,255,255,.08);cursor:pointer}
+    .card:hover,.card.selected{border-color:rgba(62,156,255,.42)}
+    .card h3{margin:0;font-size:18px;letter-spacing:-.03em}
+    .card p{margin:0;color:var(--muted);font-size:14px;line-height:1.45}
+    .card-foot{display:flex;justify-content:space-between;gap:8px;align-items:center}
+    .small{font-size:12px;color:var(--muted)}
+    .empty{min-height:140px;border:1px dashed rgba(255,255,255,.08);border-radius:18px;display:grid;place-items:center;text-align:center;color:var(--muted);padding:18px}
+    .side-shell .panel{padding:14px}
+    .chat-log,.task-log,.decision-list{max-height:220px}
+    .chat-item,.task-item,.decision-item{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px;line-height:1.45}
+    .chat-item:last-child,.task-item:last-child,.decision-item:last-child{border-bottom:none}
+    .author{font-weight:700}
+    .chat-input{display:grid;grid-template-columns:1fr auto;gap:10px;margin-top:10px}
+    .detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .detail-box{padding:12px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.03)}
+    .detail-box .k{font-size:12px;color:var(--muted);margin-bottom:6px}
+    .detail-box .v{font-size:14px;line-height:1.45}
+    .status{font-size:13px;line-height:1.45;color:var(--muted)}
+    .status.ok{color:#bdf1cb}.status.warn{color:#ffd9a3}.status.bad{color:#ffc2c2}
+    @media (max-width:1380px){.workspace{grid-template-columns:280px minmax(0,1fr)}.side-shell{grid-column:1 / -1;grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media (max-width:980px){.workspace{grid-template-columns:1fr}.side-shell{grid-template-columns:1fr}.board{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="panel">
+      <div class="hero">
+        <div>
+          <h1>Coder Factory</h1>
+          <p>Private owner dashboard for the coder factory. Owner speaks only with the orchestrator, while executor, reviewer, and deployer work in separate columns.</p>
+        </div>
+        <div class="toolbar">
+          <label>Plan ID<input id="planFilter" placeholder="optional plan_id" /></label>
+          <button id="btnRefresh">Refresh</button>
+        </div>
+      </div>
+      <div class="metrics" id="metrics"></div>
+    </section>
+
+    <section class="workspace">
+      <aside class="plan-shell">
+        <section class="panel">
+          <div class="plan-head">
+            <div>
+              <div class="section-head"><strong>Plan</strong><span id="planSummary" class="small"></span></div>
+              <div class="small">Human-readable sequence of work for the owner. Cards on the board are execution units under this plan.</div>
+            </div>
+          </div>
+          <div class="plan-list" id="planList"></div>
+        </section>
+      </aside>
+
+      <main class="panel board-wrap">
+        <div class="board-head">
+          <div>
+            <strong>Factory Floor</strong>
+            <div class="small">Cards are separated by coder role, not by generic business status.</div>
+          </div>
+          <div id="boardSummary" class="small"></div>
+        </div>
+        <div class="board" id="board"></div>
+      </main>
+
+      <aside class="side-shell">
+        <section class="panel">
+          <div class="section-head">
+            <strong>Orchestrator Chat</strong>
+            <span class="small" id="chatContext">global</span>
+          </div>
+          <div class="small" style="margin:6px 0 10px">This is the only owner-facing conversation lane inside the coder factory.</div>
+          <div class="chat-log" id="chatLog"></div>
+          <div class="chat-input">
+            <input id="chatInput" placeholder="Message to orchestrator..." />
+            <button id="chatSend">Send</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <strong>Owner Decisions</strong>
+            <span id="decisionCount" class="small"></span>
+          </div>
+          <div class="small" style="margin:6px 0 10px">Stage start and finish approvals are collected here so they do not get lost in the chat stream.</div>
+          <div class="decision-list" id="decisionList"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <strong id="detailTitle">Task Detail</strong>
+            <span id="detailRole" class="small">select a card</span>
+          </div>
+          <div class="detail-grid" id="detailGrid"></div>
+          <div class="actions" id="detailActions" style="margin-top:12px"></div>
+          <div style="margin-top:12px">
+            <strong>Executor / Reviewer Discussion</strong>
+            <div class="task-log" id="taskLog" style="margin-top:8px"></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <strong>Status</strong>
+          <div id="status" class="status" style="margin-top:8px"></div>
+        </section>
+      </aside>
+    </section>
+  </div>
+
+  <script>
+    const ROLE_LANES = [
+      { key: "executor", title: "Executor", hint: "Makes the changes." },
+      { key: "reviewer", title: "Reviewer", hint: "Checks work and opens P1/P2." },
+      { key: "deployer", title: "Deployer", hint: "Applies release and smoke checks." },
+    ];
+    const OWNER_CHAT_ROLES = new Set(["human_telegram", "orchestrator"]);
+    const TASK_CHAT_ROLES = new Set(["executor", "reviewer", "deployer", "orchestrator", "human_telegram"]);
+
+    const planFilterEl = document.getElementById("planFilter");
+    const metricsEl = document.getElementById("metrics");
+    const planListEl = document.getElementById("planList");
+    const planSummaryEl = document.getElementById("planSummary");
+    const boardEl = document.getElementById("board");
+    const boardSummaryEl = document.getElementById("boardSummary");
+    const chatLogEl = document.getElementById("chatLog");
+    const chatInputEl = document.getElementById("chatInput");
+    const chatContextEl = document.getElementById("chatContext");
+    const decisionListEl = document.getElementById("decisionList");
+    const decisionCountEl = document.getElementById("decisionCount");
+    const detailTitleEl = document.getElementById("detailTitle");
+    const detailRoleEl = document.getElementById("detailRole");
+    const detailGridEl = document.getElementById("detailGrid");
+    const detailActionsEl = document.getElementById("detailActions");
+    const taskLogEl = document.getElementById("taskLog");
+    const statusEl = document.getElementById("status");
+
+    let tasks = [];
+    let approvals = [];
+    let chatItems = [];
+    let selectedTaskId = null;
+
+    const setStatus = (text, kind = "ok") => {
+      statusEl.className = `status ${kind}`;
+      statusEl.textContent = text;
+    };
+
+    async function apiGet(url) {
+      const r = await fetch(url);
+      const data = await r.json().catch(() => null);
+      if (!r.ok || !data || !data.ok) throw new Error(data && data.error ? data.error.message : `HTTP ${r.status}`);
+      return data.data;
+    }
+
+    async function apiPost(url, body) {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {}),
+      });
+      const data = await r.json().catch(() => null);
+      if (!r.ok || !data || !data.ok) throw new Error(data && data.error ? data.error.message : `HTTP ${r.status}`);
+      return data.data;
+    }
+
+    function coderTasks() {
+      return tasks.filter((task) => ROLE_LANES.some((lane) => lane.key === String(task.assignee || "").trim().toLowerCase()));
+    }
+
+    function selectedTask() {
+      return coderTasks().find((task) => task.id === selectedTaskId) || null;
+    }
+
+    function stageLabel(task) {
+      if (task.status === "done") return "Done";
+      if (task.status === "failed") return "Failed";
+      if (task.status === "blocked") return "Blocked";
+      if (task.review && task.review.open_p1 > 0) return "Review rework";
+      if (task.requires_end_approval && task.end_gate_status === "pending") return "Awaiting owner finish";
+      if (task.requires_start_approval && task.start_gate_status === "pending") return "Awaiting owner start";
+      if (task.status === "in_progress") return "Working";
+      return "Queued";
+    }
+
+    function nextOwnerAsk(task) {
+      if (task.requires_start_approval && task.start_gate_status === "pending") return "Approve stage start";
+      if (task.requires_end_approval && task.end_gate_status === "pending") return "Approve stage finish";
+      if (task.review && task.review.open_p1 > 0) return "Reviewer requested fixes";
+      return "No owner action needed";
+    }
+
+    function chipsFor(task) {
+      const chips = [];
+      chips.push({ text: stageLabel(task), cls: task.status === "done" ? "ok" : task.status === "failed" || task.status === "blocked" ? "bad" : "info" });
+      if (task.quality && task.quality.total_required > 0) {
+        const ok = task.quality.total_required === task.quality.total_passed;
+        chips.push({ text: `Checks ${task.quality.total_passed}/${task.quality.total_required}`, cls: ok ? "ok" : "warn" });
+      }
+      if (task.review && task.review.open_p1 > 0) chips.push({ text: `P1 ${task.review.open_p1}`, cls: "bad" });
+      if (task.review && task.review.open_p2 > 0) chips.push({ text: `P2 ${task.review.open_p2}`, cls: "warn" });
+      if (task.requires_start_approval) chips.push({ text: `Start ${task.start_gate_status || "off"}`, cls: task.start_gate_status === "approved" ? "ok" : "warn" });
+      if (task.requires_end_approval) chips.push({ text: `Finish ${task.end_gate_status || "off"}`, cls: task.end_gate_status === "approved" ? "ok" : "warn" });
+      return chips;
+    }
+
+    function renderMetrics() {
+      const coder = coderTasks();
+      const total = coder.length;
+      const active = coder.filter((task) => task.status !== "done").length;
+      const waitingOwner = coder.filter((task) =>
+        (task.requires_start_approval && task.start_gate_status === "pending") ||
+        (task.requires_end_approval && task.end_gate_status === "pending")
+      ).length;
+      const blockers = coder.filter((task) => task.status === "blocked" || task.status === "failed" || (task.review && task.review.open_p1 > 0)).length;
+      const done = coder.filter((task) => task.status === "done").length;
+
+      metricsEl.innerHTML = "";
+      [
+        ["Coder tasks", total],
+        ["Active", active],
+        ["Need owner", waitingOwner],
+        ["Blockers", blockers],
+        ["Done", done],
+      ].forEach(([label, value]) => {
+        const el = document.createElement("div");
+        el.className = "metric";
+        el.innerHTML = `<div class="k">${label}</div><div class="v">${value}</div>`;
+        metricsEl.appendChild(el);
+      });
+    }
+
+    function buildPlanSteps() {
+      const coder = coderTasks()
+        .slice()
+        .sort((a, b) => {
+          const aStep = a.plan_step_order || Number.MAX_SAFE_INTEGER;
+          const bStep = b.plan_step_order || Number.MAX_SAFE_INTEGER;
+          if (aStep !== bStep) return aStep - bStep;
+          return String(a.id).localeCompare(String(b.id));
+        });
+
+      if (!coder.length) return [];
+
+      const groups = new Map();
+      coder.forEach((task) => {
+        const key = `${task.plan_id || "no-plan"}:${task.plan_step_order || task.id}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(task);
+      });
+
+      return Array.from(groups.values()).map((group) => {
+        const first = group[0];
+        const completed = group.every((task) => task.status === "done");
+        const active = group.some((task) => task.id === selectedTaskId);
+        const currentRole = group.find((task) => task.status !== "done")?.assignee || "orchestrator";
+        const currentState = group.find((task) => task.status !== "done") || first;
+        return {
+          key: `${first.plan_id || "no-plan"}:${first.plan_step_order || first.id}`,
+          title: first.title || "Untitled step",
+          done: completed,
+          active,
+          step: first.plan_step_order || "unplanned",
+          planId: first.plan_id || "-",
+          role: currentRole,
+          ask: nextOwnerAsk(currentState),
+          tasks: group,
+        };
+      });
+    }
+
+    function renderPlan() {
+      const steps = buildPlanSteps();
+      const done = steps.filter((step) => step.done).length;
+      planSummaryEl.textContent = steps.length ? `${done}/${steps.length} completed` : "no coder plan yet";
+      planListEl.innerHTML = "";
+
+      if (!steps.length) {
+        planListEl.innerHTML = `<div class="empty">No coder tasks found yet.<br />Create or assign tasks with assignee = executor / reviewer / deployer.</div>`;
+        return;
+      }
+
+      steps.forEach((step) => {
+        const row = document.createElement("div");
+        row.className = `plan-item${step.active ? " active" : ""}`;
+        row.innerHTML = `
+          <input type="checkbox" ${step.done ? "checked" : ""} disabled />
+          <div>
+            <div class="plan-title">${step.title}</div>
+            <div class="plan-meta">
+              <span class="badge ${step.done ? "ok" : "info"}">Step ${step.step}</span>
+              <span class="badge">${step.role}</span>
+              <span>${step.ask}</span>
+            </div>
+          </div>
+        `;
+        row.onclick = () => {
+          const nextTask = step.tasks.find((task) => task.status !== "done") || step.tasks[0];
+          if (nextTask) {
+            selectedTaskId = nextTask.id;
+            renderAll();
+          }
+        };
+        planListEl.appendChild(row);
+      });
+    }
+
+    function renderBoard() {
+      boardEl.innerHTML = "";
+      const coder = coderTasks();
+      boardSummaryEl.textContent = coder.length ? `${coder.length} cards on floor` : "waiting for coder tasks";
+
+      ROLE_LANES.forEach((lane) => {
+        const section = document.createElement("section");
+        section.className = "lane";
+        const items = coder
+          .filter((task) => String(task.assignee || "").trim().toLowerCase() === lane.key)
+          .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+        section.innerHTML = `
+          <div class="lane-title"><span class="dot ${lane.key}"></span><span>${lane.title}</span></div>
+          <div class="lane-sub">${lane.hint}</div>
+        `;
+        const cards = document.createElement("div");
+        cards.className = "cards";
+
+        if (!items.length) {
+          cards.innerHTML = `<div class="empty">No cards assigned to ${lane.title.toLowerCase()}.</div>`;
+        } else {
+          items.forEach((task) => {
+            const card = document.createElement("article");
+            card.className = `card${task.id === selectedTaskId ? " selected" : ""}`;
+            card.onclick = () => {
+              selectedTaskId = task.id;
+              renderAll();
+            };
+            const chips = chipsFor(task).map((chip) => `<span class="badge ${chip.cls}">${chip.text}</span>`).join("");
+            card.innerHTML = `
+              <h3>${task.title || "Untitled task"}</h3>
+              <p>${nextOwnerAsk(task)}</p>
+              <div class="chips">${chips}</div>
+              <div class="card-foot">
+                <span class="small">${task.plan_id || "-"} / step ${task.plan_step_order || "-"}</span>
+                <span class="small">${task.id}</span>
+              </div>
+            `;
+            cards.appendChild(card);
+          });
+        }
+
+        section.appendChild(cards);
+        boardEl.appendChild(section);
+      });
+    }
+
+    function renderChat() {
+      const context = selectedTaskId ? `task ${selectedTaskId}` : "global";
+      chatContextEl.textContent = context;
+      const items = chatItems.filter((item) => OWNER_CHAT_ROLES.has(String(item.author_role || "").trim()) && (!selectedTaskId || !item.task_id || item.task_id === selectedTaskId));
+      chatLogEl.innerHTML = "";
+      if (!items.length) {
+        chatLogEl.innerHTML = `<div class="empty">No orchestrator chat yet.</div>`;
+        return;
+      }
+      items.forEach((item) => {
+        const row = document.createElement("div");
+        row.className = "chat-item";
+        row.innerHTML = `<div><span class="author">${item.author_role}</span> ${item.task_id ? `<span class="small">(task ${item.task_id})</span>` : ""}</div><div>${item.message}</div><div class="small">${item.created_at || ""}</div>`;
+        chatLogEl.appendChild(row);
+      });
+      chatLogEl.scrollTop = chatLogEl.scrollHeight;
+    }
+
+    function renderDecisions() {
+      const coderIds = new Set(coderTasks().map((task) => task.id));
+      const items = approvals.filter((approval) => coderIds.has(approval.entity_id));
+      decisionCountEl.textContent = items.length ? `${items.length} pending` : "nothing pending";
+      decisionListEl.innerHTML = "";
+      if (!items.length) {
+        decisionListEl.innerHTML = `<div class="empty">No pending owner decisions.</div>`;
+        return;
+      }
+
+      items.forEach((approval) => {
+        const row = document.createElement("div");
+        row.className = "decision-item";
+        row.innerHTML = `
+          <div><strong>${approval.entity_id}</strong></div>
+          <div>${approval.entity_type} / ${approval.action_class}</div>
+          <div class="small">requested by ${approval.requested_by_role} -> approver ${approval.approver_role}</div>
+        `;
+        const actions = document.createElement("div");
+        actions.className = "decision-actions";
+        const approve = document.createElement("button");
+        approve.textContent = "Approve";
+        approve.onclick = async () => {
+          try {
+            setStatus(`Approving ${approval.approval_id}...`, "warn");
+            await apiPost("/approvals/decide", {
+              approval_id: approval.approval_id,
+              decision: "approved",
+              decided_by_role: approval.approver_role,
+              reason: "approved from coder dashboard",
+            });
+            await refreshAll();
+          } catch (e) {
+            setStatus(`Approve failed: ${e.message}`, "bad");
+          }
+        };
+        const reject = document.createElement("button");
+        reject.textContent = "Reject";
+        reject.onclick = async () => {
+          const reason = prompt("Why reject this stage?") || "rejected from coder dashboard";
+          try {
+            setStatus(`Rejecting ${approval.approval_id}...`, "warn");
+            await apiPost("/approvals/decide", {
+              approval_id: approval.approval_id,
+              decision: "rejected",
+              decided_by_role: approval.approver_role,
+              reason,
+            });
+            await refreshAll();
+          } catch (e) {
+            setStatus(`Reject failed: ${e.message}`, "bad");
+          }
+        };
+        actions.appendChild(approve);
+        actions.appendChild(reject);
+        row.appendChild(actions);
+        decisionListEl.appendChild(row);
+      });
+    }
+
+    function renderTaskDetail() {
+      const task = selectedTask();
+      detailGridEl.innerHTML = "";
+      detailActionsEl.innerHTML = "";
+      taskLogEl.innerHTML = "";
+
+      if (!task) {
+        detailTitleEl.textContent = "Task Detail";
+        detailRoleEl.textContent = "select a card";
+        detailGridEl.innerHTML = `<div class="detail-box"><div class="k">Selected task</div><div class="v">Open a card to inspect the coder conversation.</div></div>`;
+        taskLogEl.innerHTML = `<div class="empty">No task selected.</div>`;
+        return;
+      }
+
+      detailTitleEl.textContent = task.title || task.id;
+      detailRoleEl.textContent = `${task.assignee || "-"} / ${stageLabel(task)}`;
+
+      const boxes = [
+        ["Plan step", `${task.plan_id || "-"} / step ${task.plan_step_order || "-"}`],
+        ["Owner ask", nextOwnerAsk(task)],
+        ["Checks", task.quality ? `${task.quality.total_passed}/${task.quality.total_required}${task.quality.missing.length ? ` | missing: ${task.quality.missing.join(", ")}` : ""}` : "-"],
+        ["Review", task.review ? `P1: ${task.review.open_p1} | P2: ${task.review.open_p2}` : "-"],
+      ];
+      boxes.forEach(([k, v]) => {
+        const box = document.createElement("div");
+        box.className = "detail-box";
+        box.innerHTML = `<div class="k">${k}</div><div class="v">${v}</div>`;
+        detailGridEl.appendChild(box);
+      });
+
+      const openInBoard = document.createElement("button");
+      openInBoard.textContent = "Open business dashboard";
+      openInBoard.onclick = () => {
+        window.location.href = `/dashboard`;
+      };
+      detailActionsEl.appendChild(openInBoard);
+
+      const discuss = chatItems.filter((item) => item.task_id === task.id && TASK_CHAT_ROLES.has(String(item.author_role || "").trim()));
+      if (!discuss.length) {
+        taskLogEl.innerHTML = `<div class="empty">No executor/reviewer discussion yet for this task.</div>`;
+        return;
+      }
+      discuss.forEach((item) => {
+        const row = document.createElement("div");
+        row.className = "task-item";
+        row.innerHTML = `<div><span class="author">${item.author_role}</span></div><div>${item.message}</div><div class="small">${item.created_at || ""}</div>`;
+        taskLogEl.appendChild(row);
+      });
+    }
+
+    function renderAll() {
+      renderMetrics();
+      renderPlan();
+      renderBoard();
+      renderChat();
+      renderDecisions();
+      renderTaskDetail();
+    }
+
+    async function refreshAll() {
+      try {
+        const params = new URLSearchParams();
+        if (planFilterEl.value.trim()) params.set("plan_id", planFilterEl.value.trim());
+        const suffix = params.toString() ? `?${params.toString()}` : "";
+        const [taskData, approvalData, chatData] = await Promise.all([
+          apiGet(`/tasks${suffix}`),
+          apiGet("/approvals/pending"),
+          apiGet("/chat/messages?actor_role=human_telegram&limit=120"),
+        ]);
+        tasks = taskData.tasks || [];
+        approvals = approvalData.items || [];
+        chatItems = chatData.items || [];
+        if (selectedTaskId && !tasks.some((task) => task.id === selectedTaskId)) selectedTaskId = null;
+        renderAll();
+        setStatus(`Updated at ${new Date().toLocaleTimeString()}`, "ok");
+      } catch (e) {
+        setStatus(`Refresh failed: ${e.message}`, "bad");
+      }
+    }
+
+    document.getElementById("btnRefresh").onclick = () => { void refreshAll(); };
+    document.getElementById("chatSend").onclick = async () => {
+      const message = chatInputEl.value.trim();
+      if (!message) return;
+      try {
+        await apiPost("/chat/messages", {
+          actor_role: "human_telegram",
+          message,
+          task_id: selectedTaskId || undefined,
+        });
+        chatInputEl.value = "";
+        await refreshAll();
+      } catch (e) {
+        setStatus(`Chat failed: ${e.message}`, "bad");
+      }
+    };
+    planFilterEl.onchange = () => { void refreshAll(); };
+
+    void refreshAll();
+    setInterval(() => { void refreshAll(); }, 5000);
+  </script>
+</body>
+</html>

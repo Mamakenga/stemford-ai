@@ -1037,3 +1037,24 @@ P2 items: pending
 
 ### Review ask
 1. Reviewer focus: confirm that active-start navigation is now conflict-free and no live route points to non-existent Paperclip files.
+## H-2026-03-28-07
+
+### Changes
+1. Added separate owner-facing route `/coder-factory` in `app/control-api/server.js`.
+2. Added dedicated `app/control-api/public/coder_factory.html` as a separate dashboard for the coder factory.
+3. Made the screen explicitly owner-facing in wording: private owner dashboard, orchestrator-only chat lane, separate owner decision inbox, separate link back to business dashboard.
+4. Kept coder dashboard distinct from the generic business dashboard instead of extending `/dashboard` further.
+
+### Checks
+1. `node --check app/control-api/server.js` passed.
+2. Verified route registration for `/coder-factory`.
+3. Verified owner-only UX copy exists in the new page.
+
+### Open risks
+1. This slice is UI + route only; access control for web ownership is not yet hardened.
+2. The page currently reads the shared task/chat engine and assumes coder tasks are identified by assignee role (`executor/reviewer/deployer`).
+3. No deploy to VPS yet.
+
+### Review ask
+1. P1 focus: confirm the coder dashboard is clearly separated from the business dashboard at route, language, and workflow level.
+2. P1 focus: confirm no existing business flow was changed by adding the new route.

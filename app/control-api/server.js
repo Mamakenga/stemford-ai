@@ -312,6 +312,10 @@ app.get("/dashboard", (_req, res) => {
   res.sendFile(path.join(__dirname, "public", "dashboard.html"));
 });
 
+app.get("/coder-factory", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "coder_factory.html"));
+});
+
 app.get("/db/ping", async (_req, res) => {
   try {
     const r = await pool.query("select now() as ts");
