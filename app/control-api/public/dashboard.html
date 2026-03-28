@@ -268,6 +268,7 @@
         `start gate: ${card.start_gate_status || "-"}`,
         `end gate: ${card.end_gate_status || "-"}`,
         `checks: ${card.quality && card.quality.total_required ? `${card.quality.total_passed}/${card.quality.total_required}` : "0/0"}`,
+        `review: P1=${card.review ? card.review.open_p1 : 0}, P2=${card.review ? card.review.open_p2 : 0}`,
       ].filter(Boolean).join("\n");
 
       wrap.innerHTML = `
@@ -305,6 +306,21 @@
           actor_role: actorRole(),
           mode: "replace",
           passed_checks: next,
+        });
+        await refreshAll();
+      });
+
+      addBtn("Review", async () => {
+        const severity = (prompt("Severity (p1 or p2):", "p2") || "").trim().toLowerCase();
+        if (!severity) return;
+        const title = prompt("Review finding title:");
+        if (!title) return;
+        const details = prompt("Details (optional):") || "";
+        await apiPost(`/tasks/${encodeURIComponent(card.id)}/review-findings`, {
+          actor_role: actorRole(),
+          severity,
+          title,
+          details,
         });
         await refreshAll();
       });

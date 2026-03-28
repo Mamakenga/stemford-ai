@@ -829,3 +829,40 @@ Review ask:
 Verdict: pending
 P1 items: pending
 P2 items: pending
+
+---
+
+## H-2026-03-28-02
+Role: Codex=Executor
+Scope: Review gate MVP (formal P1/P2 findings + P1 block on task completion)
+Commits: pending
+Changes:
+- Added migration `app/control-api/migrations/013_review_findings.sql`:
+  - table `review_findings`
+  - severities `p1|p2`
+  - statuses `open|resolved`
+  - task linkage + reviewer attribution
+- Extended `app/control-api/server.js`:
+  - task list/task detail now expose review summary (`open_p1`, `open_p2`, `resolved_total`)
+  - new endpoints:
+    - `GET /tasks/:id/review-findings`
+    - `POST /tasks/:id/review-findings`
+    - `POST /review-findings/:id/resolve`
+  - `POST /tasks/:id/complete` now blocks with `review_p1_blocked` if open P1 findings exist
+- Updated `app/control-api/public/dashboard.html`:
+  - card meta now shows `review: P1=x, P2=y`
+  - new `Review` action for quick creation of P1/P2 findings
+- Updated `docs/TASK_STATE_MACHINE.md` with Review Gate rules.
+Checks:
+- `node --check app/control-api/server.js` passed.
+- Static diff review confirms review summary is wired into task list, task detail, completion gate and dashboard card meta.
+Open risks:
+- Dashboard currently supports creating findings, but not resolving them yet from UI.
+- P2 auto-follow-up creation is not implemented in this increment.
+- VPS/runtime smoke for migration `013_review_findings.sql` not yet run.
+Review ask:
+- Validate that MVP review gate scope is sufficient for the next deploy cycle.
+- Focus on completion-flow regressions and summary counts consistency.
+Verdict: pending
+P1 items: pending
+P2 items: pending

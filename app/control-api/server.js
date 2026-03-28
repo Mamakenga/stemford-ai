@@ -164,6 +164,15 @@ function buildTaskQualityState(row, extraPassedChecks = []) {
   };
 }
 
+function buildTaskReviewSummary(row) {
+  return {
+    open_p1: Number(row.review_open_p1 || 0),
+    open_p2: Number(row.review_open_p2 || 0),
+    resolved_total: Number(row.review_resolved_total || 0),
+    blocking: Number(row.review_open_p1 || 0) > 0,
+  };
+}
+
 const TASK_ACTION_RULES = {
   claim: {
     from: ["todo", "blocked"],
@@ -518,7 +527,10 @@ app.get("/tasks", async (req, res) => {
            quality_checks_required,quality_checks_passed,
            start_gate_approval_id,start_gate_status,
            end_gate_approval_id,end_gate_status,
-           claimed_by,claimed_at,completed_at,status_reason
+           claimed_by,claimed_at,completed_at,status_reason,
+           (select count(*)::int from review_findings rf where rf.task_id = tasks.id and rf.status = 'open' and rf.severity = 'p1') as review_open_p1,
+           (select count(*)::int from review_findings rf where rf.task_id = tasks.id and rf.status = 'open' and rf.severity = 'p2') as review_open_p2,
+           (select count(*)::int from review_findings rf where rf.task_id = tasks.id and rf.status = 'resolved') as review_resolved_total
     from tasks
     ${where.length ? "where " + where.join(" and ") : ""}
     order by due_at nulls last, id
@@ -537,6 +549,7 @@ app.get("/tasks", async (req, res) => {
       return {
         ...task,
         quality: buildTaskQualityState(task),
+        review: buildTaskReviewSummary(task),
       };
     });
     if (String(view || "").trim().toLowerCase() === "kanban") {
@@ -561,6 +574,9 @@ app.get("/tasks", async (req, res) => {
           requires_end_approval: false,
           quality_checks_required: [],
           quality_checks_passed: [],
+          review_open_p1: 0,
+          review_open_p2: 0,
+          review_resolved_total: 0,
           start_gate_approval_id: null,
           start_gate_status: null,
           end_gate_approval_id: null,
@@ -570,13 +586,18 @@ app.get("/tasks", async (req, res) => {
           return ok(res, { view: "kanban", count: tasks.length, columns: buildKanbanColumns(tasks.map((row) => ({
             ...normalizeTaskRowForView(row),
             quality: buildTaskQualityState(row),
+            review: buildTaskReviewSummary(row),
           }))) });
         }
         return ok(res, {
           count: qLegacy.rowCount,
           tasks: tasks.map((row) => {
             const task = normalizeTaskRowForView(row);
-            return { ...task, quality: buildTaskQualityState(task) };
+            return {
+              ...task,
+              quality: buildTaskQualityState(task),
+              review: buildTaskReviewSummary(task),
+            };
           }),
         });
       } catch (legacyErr) {
@@ -599,7 +620,10 @@ app.get("/tasks/:id", async (req, res) => {
               quality_checks_required,quality_checks_passed,
               start_gate_approval_id,start_gate_status,
               end_gate_approval_id,end_gate_status,
-              claimed_by,claimed_at,completed_at,status_reason
+              claimed_by,claimed_at,completed_at,status_reason,
+              (select count(*)::int from review_findings rf where rf.task_id = tasks.id and rf.status = 'open' and rf.severity = 'p1') as review_open_p1,
+              (select count(*)::int from review_findings rf where rf.task_id = tasks.id and rf.status = 'open' and rf.severity = 'p2') as review_open_p2,
+              (select count(*)::int from review_findings rf where rf.task_id = tasks.id and rf.status = 'resolved') as review_resolved_total
        from tasks
        where id = $1`,
       [taskId]
@@ -609,6 +633,7 @@ app.get("/tasks/:id", async (req, res) => {
     return ok(res, {
       ...task,
       quality: buildTaskQualityState(task),
+      review: buildTaskReviewSummary(task),
     });
   } catch (e) {
     const msg = String(e?.message || "");
@@ -635,6 +660,9 @@ app.get("/tasks/:id", async (req, res) => {
         requires_end_approval: false,
         quality_checks_required: [],
         quality_checks_passed: [],
+        review_open_p1: 0,
+        review_open_p2: 0,
+        review_resolved_total: 0,
         start_gate_approval_id: null,
         start_gate_status: null,
         end_gate_approval_id: null,
@@ -643,6 +671,7 @@ app.get("/tasks/:id", async (req, res) => {
       return ok(res, {
         ...task,
         quality: buildTaskQualityState(task),
+        review: buildTaskReviewSummary(task),
       });
     } catch (legacyErr) {
       return fail(res, 500, "task_query_failed", legacyErr.message);
@@ -1788,6 +1817,132 @@ app.post("/tasks/:id/quality-checks", async (req, res) => {
   }
 });
 
+app.get("/tasks/:id/review-findings", async (req, res) => {
+  const taskId = String(req.params.id || "").trim();
+  if (!taskId) return fail(res, 400, "validation_error", "task id is required");
+
+  try {
+    const q = await pool.query(
+      `select id,task_id,severity,title,details,status,created_by_role,resolved_by_role,created_at,resolved_at
+       from review_findings
+       where task_id = $1
+       order by
+         case severity when 'p1' then 0 else 1 end,
+         case status when 'open' then 0 else 1 end,
+         created_at desc`,
+      [taskId]
+    );
+    const items = q.rows.map((row) => ({
+      ...row,
+      created_at: toIsoTimestamp(row.created_at),
+      resolved_at: toIsoTimestamp(row.resolved_at),
+    }));
+    return ok(res, { count: items.length, items });
+  } catch (e) {
+    return fail(res, 500, "review_findings_query_failed", e.message);
+  }
+});
+
+app.post("/tasks/:id/review-findings", async (req, res) => {
+  const taskId = String(req.params.id || "").trim();
+  const actor_role = String(req.body?.actor_role || "").trim();
+  const severity = String(req.body?.severity || "").trim().toLowerCase();
+  const title = String(req.body?.title || "").trim();
+  const details = req.body?.details ? String(req.body.details).trim() : null;
+
+  if (!taskId || !actor_role || !severity || !title) {
+    return fail(res, 400, "validation_error", "task id, actor_role, severity and title are required");
+  }
+  if (!["p1", "p2"].includes(severity)) {
+    return fail(res, 400, "validation_error", "severity must be p1 or p2");
+  }
+
+  const allowed = await requireToolAccess(
+    res,
+    actor_role,
+    "tasks.write",
+    { entity_type: "task", entity_id: taskId }
+  );
+  if (!allowed) return;
+
+  try {
+    const taskCheck = await pool.query(`select id from tasks where id = $1`, [taskId]);
+    if (taskCheck.rowCount === 0) return fail(res, 404, "not_found", "task not found");
+
+    const findingId = id("rev");
+    const q = await pool.query(
+      `insert into review_findings (id,task_id,severity,title,details,status,created_by_role)
+       values ($1,$2,$3,$4,$5,'open',$6)
+       returning id,task_id,severity,title,details,status,created_by_role,resolved_by_role,created_at,resolved_at`,
+      [findingId, taskId, severity, title, details, actor_role]
+    );
+
+    const row = q.rows[0];
+    await writeAction("review_finding_created", "task", taskId, actor_role, {
+      finding_id: row.id,
+      severity: row.severity,
+      title: row.title,
+    });
+
+    return ok(res, {
+      ...row,
+      created_at: toIsoTimestamp(row.created_at),
+      resolved_at: toIsoTimestamp(row.resolved_at),
+    });
+  } catch (e) {
+    return fail(res, 500, "review_finding_create_failed", e.message);
+  }
+});
+
+app.post("/review-findings/:id/resolve", async (req, res) => {
+  const findingId = String(req.params.id || "").trim();
+  const actor_role = String(req.body?.actor_role || "").trim();
+
+  if (!findingId || !actor_role) {
+    return fail(res, 400, "validation_error", "finding id and actor_role are required");
+  }
+
+  const allowed = await requireToolAccess(
+    res,
+    actor_role,
+    "tasks.write",
+    { entity_type: "review_finding", entity_id: findingId }
+  );
+  if (!allowed) return;
+
+  try {
+    const q = await pool.query(
+      `update review_findings
+       set status = 'resolved',
+           resolved_by_role = $2,
+           resolved_at = now()
+       where id = $1
+         and status = 'open'
+       returning id,task_id,severity,title,details,status,created_by_role,resolved_by_role,created_at,resolved_at`,
+      [findingId, actor_role]
+    );
+
+    if (q.rowCount === 0) {
+      return fail(res, 404, "not_found_or_already_resolved", "review finding not found or already resolved");
+    }
+
+    const row = q.rows[0];
+    await writeAction("review_finding_resolved", "task", row.task_id, actor_role, {
+      finding_id: row.id,
+      severity: row.severity,
+      title: row.title,
+    });
+
+    return ok(res, {
+      ...row,
+      created_at: toIsoTimestamp(row.created_at),
+      resolved_at: toIsoTimestamp(row.resolved_at),
+    });
+  } catch (e) {
+    return fail(res, 500, "review_finding_resolve_failed", e.message);
+  }
+});
+
 app.post("/tasks/:id/claim", async (req, res) => {
   const taskId = req.params.id;
   const actor_role = String(req.body?.actor_role || "").trim();
@@ -2004,6 +2159,30 @@ app.post("/tasks/:id/complete", async (req, res) => {
             required_checks: quality.required,
             passed_checks: quality.passed,
             missing_checks: quality.missing,
+          },
+        },
+        meta: { schema_version: "v1", ts: new Date().toISOString() },
+      });
+    }
+
+    const reviewQ = await pool.query(
+      `select count(*)::int as open_p1
+       from review_findings
+       where task_id = $1
+         and status = 'open'
+         and severity = 'p1'`,
+      [taskId]
+    );
+    const openP1 = Number(reviewQ.rows[0]?.open_p1 || 0);
+    if (openP1 > 0) {
+      return res.status(409).json({
+        ok: false,
+        error: {
+          code: "review_p1_blocked",
+          message: "task cannot be completed while open P1 review findings exist",
+          details: {
+            task_id: taskId,
+            open_p1: openP1,
           },
         },
         meta: { schema_version: "v1", ts: new Date().toISOString() },
