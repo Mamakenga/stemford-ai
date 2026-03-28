@@ -1058,3 +1058,30 @@ P2 items: pending
 ### Review ask
 1. P1 focus: confirm the coder dashboard is clearly separated from the business dashboard at route, language, and workflow level.
 2. P1 focus: confirm no existing business flow was changed by adding the new route.
+
+## H-2026-03-28-08
+
+### Changes
+1. Rewrote `START_HERE.md` into a strict navigation entry point instead of a flat list of links.
+2. Reworked `plans/README.md` into a clearer map with:
+   - shortest safe reading route
+   - product ladder
+   - foundation vs runtime vs dashboards
+   - question-based reading recipes
+3. Updated `plans/PLAN_Coder_Factory.md` to explicitly state that coder factory is built on top of the existing reliability/control-plane skeleton and that OpenClaw is the runtime layer, not the rails.
+
+### Checks
+1. Manual read-through confirms the new active entry points now answer:
+   - what to read first
+   - what we are building first
+   - what already exists under the product
+   - where coder factory stops and business control plane begins
+2. No product logic or runtime code was changed in this pass.
+
+### Open risks
+1. Historical archive files still exist by design and can still confuse if opened directly outside the active navigation path.
+2. `AGENTS.md` still shows old mojibake in some Cyrillic lines in terminal output, but it no longer points to dead navigation files.
+
+### Review ask
+1. P1 focus: confirm the project can now be navigated from `START_HERE.md` without extra verbal explanation.
+2. P1 focus: confirm the distinction between safe rails, OpenClaw runtime, coder factory, and business control plane is now explicit enough in the active canon.
