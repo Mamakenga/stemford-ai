@@ -37,6 +37,33 @@ Important distinction:
 2. `OpenClaw` = execution runtime attached to those rails
 3. `Coder Factory Dashboard` = owner-facing control surface on top of that engine
 
+## 1.1) OpenClaw attachment readiness
+
+The control-plane foundation is already strong enough to begin attaching the OpenClaw runtime layer.
+
+What is already in place:
+1. task registry and task statuses
+2. approvals for formal Start / End decisions
+3. chat storage for owner/orchestrator and task discussion
+4. quality checks before completion
+5. review findings with `P1 / P2`
+6. runtime run registry through `agent_runs`
+7. retry, dead-letter, and watchdog behavior
+
+Practical meaning:
+1. the rails are already good enough for the first working OpenClaw integration
+2. the missing work is now mostly about role separation and runtime wiring, not about inventing the whole foundation from zero
+
+## 1.2) Remaining gaps before full role runtime
+
+The following items still must be finalized before the coder factory can be considered a mature OpenClaw-based team:
+1. strict `task contract`
+2. strict `role run contract`
+3. separate coder-factory runtime contour on the VPS
+4. real bridge between Control API and role-specific OpenClaw runs
+5. role-scoped tools, workspaces, and failure policies
+6. visible run-to-role mapping in the owner dashboard
+
 ## 2) Purpose
 
 Build an AI software factory where the owner manages work through an orchestrator, and the internal pipeline is executed by:
@@ -102,6 +129,21 @@ Non-negotiable rule:
 2. every fallback event is logged in the run history
 3. repeated runtime failure moves the run to `blocked` or `dead_letter`
 
+## 6.1) Preferred technical shape of the runtime
+
+The preferred implementation is:
+1. one dedicated coder-factory runtime contour
+2. one runtime dispatcher inside that contour
+3. multiple role profiles inside the contour
+4. one separate run per role action
+
+This is preferred over a "single general agent with many skills" model.
+
+Practical meaning:
+1. roles are separated by runtime profile, not just by wording
+2. `executor`, `reviewer`, and `deployer` do not share the same active run
+3. every role action is independently visible, retryable, and auditable
+
 ## 7) Required contracts
 
 Before full runtime autonomy, these contracts must exist together:
@@ -136,6 +178,36 @@ For every runtime role invocation, the system must pass:
 6. required output format
 7. timeout / budget policy
 8. fallback policy
+
+## 7.3) Database contract for role isolation
+
+The database is the control book that keeps the roles separate.
+
+Main entities:
+1. `tasks` = the work unit itself
+2. `approval_requests` = owner decisions
+3. `chat_messages` = owner/orchestrator and internal task dialogue
+4. `review_findings` = formal `P1 / P2` review output
+5. `agent_runs` = one runtime execution record per role action
+
+Hard rule:
+1. one role action = one `agent_runs` row
+2. role transitions create a new run, not a "mode switch" inside the same run
+3. the next role starts only from structured artifacts stored through the control plane
+
+This is what makes the roles real subagents instead of three labels on one bot.
+
+## 7.4) Autonomy model for the three coder roles
+
+`executor`, `reviewer`, and `deployer` are considered separate subagents only if all of the following are true:
+1. separate runtime profile
+2. separate allowed tools
+3. separate run record in `agent_runs`
+4. separate output format
+5. separate state transition in the pipeline
+6. separate visible timeline entry in the dashboard
+
+If these conditions are not met, the system is only simulating multi-agent behavior, not implementing it.
 
 ## 8) Provider routing policy
 
@@ -264,6 +336,15 @@ Executor runtime must:
 Result:
 1. executor becomes a controlled worker, not a free-form chatbot.
 
+Step 8.1. Persist the executor run as a first-class database object.
+Required behavior:
+1. executor start creates or updates an `agent_runs` record
+2. role, task, stage, status, and failure reason are queryable through the control plane
+3. executor artifacts are attached back to the task context
+
+Result:
+1. executor becomes a real tracked worker in the system, not a hidden subprocess.
+
 Step 9. Build the reviewer bridge: artifacts -> formal verdict.
 Reviewer output must contain:
 1. verdict
@@ -281,6 +362,15 @@ Allowed verdicts:
 Result:
 1. reviewer becomes a formal gate, not an informal commenter.
 
+Step 9.1. Persist the reviewer run and verdict separately from the executor run.
+Required behavior:
+1. reviewer gets a new `agent_runs` record
+2. review findings are stored in `review_findings`
+3. `P1 > 0` blocks the next transition automatically
+
+Result:
+1. review becomes a true independent stage, not a comment inside executor output.
+
 Step 10. Build the deployer bridge: approved result -> deploy + smoke.
 Deployer must:
 1. apply approved result
@@ -290,6 +380,15 @@ Deployer must:
 
 Result:
 1. deploy becomes visible, bounded, and auditable.
+
+Step 10.1. Persist deploy outcome as its own run stage.
+Required behavior:
+1. deployer gets a new `agent_runs` record
+2. smoke result is stored back into task/run context
+3. failure can block End approval cleanly
+
+Result:
+1. deploy is visible as its own subagent action, not hidden inside final completion.
 
 ### Phase D. Build the owner-facing product surface
 

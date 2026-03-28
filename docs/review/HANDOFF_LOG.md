@@ -1137,3 +1137,37 @@ P2 items: pending
 ### Review ask
 1. P1 focus: confirm the merged plan is clearer than the previous two-file split.
 2. P1 focus: confirm active navigation now points to one obvious coder-factory source of truth.
+
+## H-2026-03-28-11
+
+### Changes
+1. Added explicit OpenClaw-readiness framing to `plans/PLAN_Coder_Factory.md`:
+   - what is already ready in the control plane
+   - what still must be completed before mature role runtime
+2. Added a technical section describing the preferred runtime shape:
+   - one dedicated coder-factory contour
+   - runtime dispatcher
+   - role profiles
+   - one run per role action
+3. Added a database contract section that explains how role separation is enforced through:
+   - `tasks`
+   - `approval_requests`
+   - `chat_messages`
+   - `review_findings`
+   - `agent_runs`
+4. Added explicit sub-steps for persisting executor, reviewer, and deployer as separate run stages.
+
+### Checks
+1. Manual read-through confirms the plan now answers:
+   - is the control plane ready enough for OpenClaw attachment
+   - what concrete gaps still remain
+   - how the roles are made real through database and runtime separation
+2. No application code or runtime services were changed in this pass.
+
+### Open risks
+1. The plan now clearly defines the target separation model, but the actual runtime dispatcher and role-profile implementation still remain to be built.
+2. The database contract is explicit at the plan level; some fields and APIs may still need refinement during implementation.
+
+### Review ask
+1. P1 focus: confirm the plan is now explicit enough about why the roles are real subagents and not just skills of one bot.
+2. P1 focus: confirm the OpenClaw-readiness statement is honest and not overstating current implementation maturity.
