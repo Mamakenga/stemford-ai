@@ -161,6 +161,17 @@
       return box;
     }
 
+    function appendStrongLeadLine(parent, strongText, restText, className = "") {
+      const line = document.createElement("div");
+      if (className) line.className = className;
+      const strong = document.createElement("strong");
+      strong.textContent = strongText;
+      line.appendChild(strong);
+      if (restText) line.appendChild(document.createTextNode(restText));
+      parent.appendChild(line);
+      return line;
+    }
+
     function laneOf(task) {
       if (task.status === "done") return "Done";
       if (
@@ -318,14 +329,14 @@
       if (!task) {
         detailTitleEl.textContent = "Select a task";
         detailSubEl.textContent = "Open a card to see checks, review blockers, gates, and the next recommended action.";
-        detailGridEl.innerHTML = "";
+        detailGridEl.replaceChildren();
         [
           ["Next step", "No task selected"],
           ["Checks", "-"],
           ["Review", "-"],
           ["Gates", "-"],
         ].forEach(([label, value]) => detailGridEl.appendChild(makeInfoBox(label, value)));
-        detailActionsEl.innerHTML = "";
+        detailActionsEl.replaceChildren();
         reviewLogEl.textContent = "No task selected.";
         return;
       }
@@ -333,7 +344,7 @@
       detailTitleEl.textContent = task.title;
       detailSubEl.textContent = `${task.assignee || "-"} | ${task.id} | ${summaryFor(task)}`;
       const contract = task.task_contract || {};
-      detailGridEl.innerHTML = "";
+      detailGridEl.replaceChildren();
       [
         ["Next step", primary.label],
         ["Goal", contract.goal || "-"],
@@ -344,7 +355,7 @@
         ["DoD", (contract.definition_of_done || []).length ? contract.definition_of_done.join("; ") : "-"],
         ["Do not change", (contract.forbidden_changes || []).length ? contract.forbidden_changes.join("; ") : "-"],
       ].forEach(([label, value]) => detailGridEl.appendChild(makeInfoBox(label, value)));
-      detailActionsEl.innerHTML = "";
+      detailActionsEl.replaceChildren();
       detailActionsEl.appendChild(actionButton(primary.label, true, async () => { await runAction(task, primary); }, primary.disabled));
       detailActionsEl.appendChild(actionButton("Update Checks", false, async () => {
         const current = (task.quality_checks_passed || []).join(", ");
@@ -377,11 +388,11 @@
         reviewLogEl.textContent = "No review findings yet.";
         return;
       }
-      reviewLogEl.innerHTML = "";
+      reviewLogEl.replaceChildren();
       findings.forEach((finding) => {
         const row = document.createElement("div");
         row.className = "item";
-        appendTextNode(row, "div", `${String(finding.severity || "").toUpperCase()} | ${finding.title}`, "");
+        appendStrongLeadLine(row, String(finding.severity || "").toUpperCase(), ` | ${finding.title}`);
         appendTextNode(row, "div", finding.details || "No extra details.");
         appendTextNode(row, "div", `${finding.status} | ${finding.created_by_role} | ${finding.created_at || ""}`, "meta");
         if (finding.status === "open") {
@@ -415,7 +426,7 @@
     }
 
     function renderApprovals(items) {
-      approvalsEl.innerHTML = "";
+      approvalsEl.replaceChildren();
       if (!items.length) {
         approvalsEl.textContent = "No pending approvals.";
         return;
@@ -423,7 +434,7 @@
       items.forEach((approval) => {
         const row = document.createElement("div");
         row.className = "item";
-        appendTextNode(row, "div", `${approval.action_class} | ${approval.entity_type}:${approval.entity_id}`);
+        appendStrongLeadLine(row, approval.action_class, ` | ${approval.entity_type}:${approval.entity_id}`);
         appendTextNode(row, "div", `requested by ${approval.requested_by_role} | approver ${approval.approver_role}`, "meta");
         const actions = document.createElement("div");
         actions.className = "approve-actions";
@@ -458,11 +469,11 @@
     }
 
     function renderChat(items) {
-      chatLogEl.innerHTML = "";
+      chatLogEl.replaceChildren();
       items.forEach((message) => {
         const row = document.createElement("div");
         row.className = "item";
-        appendTextNode(row, "div", `${message.author_role}${message.task_id ? ` (task ${message.task_id})` : ""}`);
+        appendStrongLeadLine(row, message.author_role, `${message.task_id ? ` (task ${message.task_id})` : ""}`);
         appendTextNode(row, "div", message.message || "");
         appendTextNode(row, "div", message.created_at || "", "meta");
         chatLogEl.appendChild(row);
