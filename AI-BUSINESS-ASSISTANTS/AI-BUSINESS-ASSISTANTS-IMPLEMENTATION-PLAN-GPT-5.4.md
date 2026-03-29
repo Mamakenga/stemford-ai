@@ -19,7 +19,7 @@ This plan assumes:
 1. OpenClaw already runs on VPS
 2. Antigravity-backed model rotation already works for the current assistant contour
 3. Telegram already acts as the main user interface
-4. Railway is available for PostgreSQL and lightweight API hosting
+4. Railway is available for PostgreSQL, lightweight API hosting, and schedule triggering
 
 ## 2. Core Principle
 
@@ -39,7 +39,7 @@ This means:
 2. every worker receives a compact task bundle
 3. workers do not share a giant common context
 4. asynchronous mailbox-style handoff is preferred over real-time inter-agent chat
-5. long-running autonomy lives in the scheduler, not in endless chats
+5. long-running autonomy lives in the scheduler plus execution layer, not in endless chats
 
 ## 3. Runtime Architecture
 
@@ -49,21 +49,32 @@ The VPS hosts the execution layer:
 
 1. OpenClaw runtime
 2. Telegram bridge
-3. cron / systemd timers
-4. role workers
-5. local logs and temporary artifacts
+3. role workers
+4. execution of scheduled jobs after they are triggered
+5. local process logs
+6. temporary working artifacts
 
 ### 3.2 Railway responsibilities
 
-Railway hosts the control and memory layer:
+Railway hosts the control, memory, and schedule-trigger layer:
 
 1. PostgreSQL
 2. lightweight control API
 3. memory retrieval and write rules
-4. job registry
-5. owner inbox / dashboard later
+4. job registry and scheduling state
+5. cron-style scheduled triggers
+6. owner inbox / dashboard later
 
-### 3.3 Antigravity role
+### 3.3 Split of responsibility
+
+The preferred split is:
+
+1. Railway decides when a scheduled job should fire
+2. VPS decides how the job is executed through OpenClaw
+3. Railway remains the source of truth for memory, messages, decisions, runs, and artifact metadata
+4. VPS remains the source of runtime execution and process-level logging
+
+### 3.4 Antigravity role
 
 Antigravity is treated as the model routing layer for already-paid subscriptions.
 
@@ -79,7 +90,7 @@ The source of truth remains:
 
 ## 4. Role Model
 
-Start with six roles only.
+Start with seven roles.
 
 ### 4.1 orchestrator
 
@@ -94,7 +105,7 @@ Responsibilities:
 Important operating rule:
 
 1. the orchestrator is not required for every single interaction
-2. simple one-role requests may go directly to `assistant`, `researcher`, `methodist`, or `finance_analyst`
+2. simple one-role requests may go directly to `assistant`, `researcher`, `methodist`, `finance_analyst`, or `critic`
 3. the orchestrator becomes the default path for multi-role or ambiguous work
 
 ### 4.2 assistant
@@ -134,7 +145,21 @@ Responsibilities:
 3. detect risky deviations in numbers
 4. produce short finance summaries for decision-making
 
-### 4.6 memory_curator
+### 4.6 critic
+
+Responsibilities:
+
+1. review high-stakes outputs from other roles
+2. challenge weak assumptions and overconfident conclusions
+3. produce short risk memos and contradiction checks
+4. act as the formal skeptical pass before sensitive decisions
+
+Important operating rule:
+
+1. critic should see owner + business + task context, but not rely on rich role memory from other agents
+2. critic is a reviewer, not a second generator of the whole solution
+
+### 4.7 memory_curator
 
 Responsibilities:
 
@@ -145,9 +170,8 @@ Responsibilities:
 
 Later roles may be added:
 
-1. critic
-2. hiring
-3. sales ops
+1. hiring
+2. sales ops
 
 But not in MVP.
 
@@ -185,6 +209,12 @@ Recommended first routing order:
 
 1. GPT
 2. Claude
+3. Gemini
+
+### critic
+
+1. Claude
+2. GPT
 3. Gemini
 
 ### memory_curator
@@ -416,7 +446,7 @@ Important rule:
 6. relevant memory bundle is assembled
 7. the selected role runs
 8. artifacts are stored
-9. if needed, follow-up runs can be assigned to assistant, researcher, methodist, or finance_analyst
+9. if needed, follow-up runs can be assigned to assistant, researcher, methodist, finance_analyst, or critic
 10. the orchestrator replies to the founder when orchestration was involved
 
 ### 9.2 Inter-agent flow
@@ -438,7 +468,7 @@ Example:
 
 ## 10. Scheduled Jobs
 
-Start with five jobs only.
+Start with six jobs only.
 
 ### 10.1 daily founder brief
 
@@ -502,7 +532,23 @@ Output:
 2. risky trends in numbers
 3. short recommendations or questions for the founder
 
-### 10.5 memory cleanup
+### 10.5 weekly risk review
+
+Schedule:
+
+1. Friday evening after finance review
+
+Agent:
+
+1. critic
+
+Output:
+
+1. contradiction checks across active decisions
+2. short list of weak assumptions
+3. escalation notes for the founder when a proposal looks fragile
+
+### 10.6 memory cleanup
 
 Schedule:
 
@@ -535,6 +581,33 @@ These are non-negotiable.
 Keep the founder interface simple.
 
 Telegram remains the primary interface.
+
+### 12.1 Telegram group model
+
+The preferred UX is one Telegram group with Topics enabled.
+
+Recommended topic structure:
+
+1. `00 Orchestrator`
+2. `01 Assistant`
+3. `02 Researcher`
+4. `03 Methodist`
+5. `04 Finance`
+6. `05 Critic`
+
+`memory_curator` remains internal by default and does not need a user-facing topic in MVP.
+
+### 12.2 Routing inside the group
+
+Routing rules:
+
+1. if the founder writes in a role topic, the message is routed to that role
+2. if the founder explicitly tags a role, the tag overrides the topic default
+3. if the founder writes in `00 Orchestrator`, the orchestrator may invoke multiple roles
+4. simple one-role tasks can be sent directly to `@assistant`, `@researcher`, `@methodist`, `@finance`, or `@critic`
+5. internal cross-role coordination should stay in the backend message/artifact layer, not in noisy public Telegram chatter
+
+### 12.3 Founder UX
 
 The founder experience should be:
 
@@ -572,16 +645,18 @@ Optional later:
 
 ### Phase 4. Role rollout
 
-1. create five role profiles
+1. create seven role profiles
 2. connect each role to its Antigravity routing chain
 3. test one-role tasks
 4. test researcher -> assistant -> finance_analyst or methodist handoff
+5. test critic review on one high-stakes multi-role output
 
 ### Phase 5. Scheduler
 
 1. add cron or systemd timers on VPS
 2. start with daily founder brief and competitor watch
-3. log every run to `runs`
+3. add weekly critic review
+4. log every run to `runs`
 
 ### Phase 6. Memory hygiene
 
@@ -613,11 +688,13 @@ Therefore:
 The assistant department is considered working when:
 
 1. the founder can either use direct role calls for simple work or the orchestrator for complex work
-2. at least three role workers operate reliably
-3. daily and weekly scheduled outputs arrive automatically
-4. memory survives across sessions
-5. role outputs are consistent and do not bleed context into each other
-6. major decisions are preserved and reused later
+2. the Telegram group topics route work predictably to the intended role
+3. at least four role workers operate reliably
+4. daily and weekly scheduled outputs arrive automatically
+5. memory survives across sessions
+6. role outputs are consistent and do not bleed context into each other
+7. critic can review sensitive outputs before the founder acts on them
+8. major decisions are preserved and reused later
 
 ## 16. Final Recommendation
 
@@ -630,7 +707,8 @@ Start with:
 3. researcher
 4. methodist
 5. finance_analyst
-6. memory_curator
+6. critic
+7. memory_curator
 
 And build the system around:
 
