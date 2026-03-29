@@ -1255,6 +1255,8 @@ const ROLE_ACTION_WHITELIST = {
     "approvals.request.financial_change",
     "approvals.request.policy_change",
     "runtime.accept",
+    "runtime.claim",
+    "runtime.complete",
     "runtime.retry",
     "runtime.read",
   ]),
@@ -1296,6 +1298,27 @@ const ROLE_ACTION_WHITELIST = {
     "chat.write",
     "approvals.request.safe_read",
     "approvals.request.internal_write",
+    "runtime.read",
+  ]),
+  executor: new Set([
+    "chat.read",
+    "chat.write",
+    "runtime.claim",
+    "runtime.complete",
+    "runtime.read",
+  ]),
+  reviewer: new Set([
+    "chat.read",
+    "chat.write",
+    "runtime.claim",
+    "runtime.complete",
+    "runtime.read",
+  ]),
+  deployer: new Set([
+    "chat.read",
+    "chat.write",
+    "runtime.claim",
+    "runtime.complete",
     "runtime.read",
   ]),
   system_watchdog: new Set([
@@ -3175,6 +3198,95 @@ app.post("/runtime/runs/:id/start", async (req, res) => {
   }
 });
 
+app.post("/runtime/runs/claim-next", async (req, res) => {
+  const actor_role = String(req.body?.actor_role || "").trim();
+  const task_id = req.body?.task_id ? String(req.body.task_id).trim() : null;
+  const stage_id = req.body?.stage_id ? String(req.body.stage_id).trim() : null;
+
+  if (!actor_role) {
+    return fail(res, 400, "validation_error", "actor_role is required");
+  }
+  if (!CODER_FACTORY_RUNTIME_ROLES.has(actor_role)) {
+    return fail(res, 400, "validation_error", "actor_role must be executor, reviewer, or deployer");
+  }
+  {
+    const allowed = await requireToolAccess(
+      res,
+      actor_role,
+      "runtime.claim",
+      { entity_type: "agent_run", entity_id: actor_role }
+    );
+    if (!allowed) return;
+  }
+
+  const vals = [actor_role];
+  const filters = [`role = $1`, `status = 'pending'`];
+
+  if (task_id) {
+    vals.push(task_id);
+    filters.push(`run_contract->>'task_id' = $${vals.length}`);
+  }
+  if (stage_id) {
+    vals.push(stage_id);
+    filters.push(`run_contract->>'stage_id' = $${vals.length}`);
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const claimQ = await client.query(
+      `WITH picked AS (
+         SELECT id
+         FROM agent_runs
+         WHERE ${filters.join(" AND ")}
+         ORDER BY created_at ASC
+         LIMIT 1
+         FOR UPDATE SKIP LOCKED
+       )
+       UPDATE agent_runs ar
+       SET status = 'running',
+           started_at = now()
+       FROM picked
+       WHERE ar.id = picked.id
+       RETURNING ar.id, ar.trigger_id, ar.role, ar.status, ar.attempt_number,
+                 ar.correlation_id, ar.run_contract, ar.payload, ar.started_at, ar.created_at`,
+      vals
+    );
+
+    if (claimQ.rowCount === 0) {
+      await client.query("COMMIT");
+      return ok(res, {
+        claimed: false,
+        reason: "no_pending_runs",
+        role: actor_role,
+        task_id,
+        stage_id,
+      });
+    }
+
+    const row = claimQ.rows[0];
+    await client.query("COMMIT");
+
+    await writeAction("run_started", "agent_run", row.id, actor_role, {
+      role: row.role,
+      task_id: row.run_contract?.task_id || null,
+      stage_id: row.run_contract?.stage_id || null,
+      correlation_id: row.correlation_id,
+      claim_mode: "claim_next",
+    });
+
+    return ok(res, {
+      claimed: true,
+      item: row,
+    });
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    return fail(res, 500, "runtime_claim_failed", e.message);
+  } finally {
+    client.release();
+  }
+});
 // POST /runtime/runs/:id/complete — mark run as success/error/timeout
 app.post("/runtime/runs/:id/complete", async (req, res) => {
   const runId = req.params.id;
@@ -3191,13 +3303,27 @@ app.post("/runtime/runs/:id/complete", async (req, res) => {
     const allowed = await requireToolAccess(
       res,
       actor_role,
-      "runtime.accept",
+      "runtime.complete",
       { entity_type: "agent_run", entity_id: runId }
     );
     if (!allowed) return;
   }
 
   try {
+    const completeVals = [
+      runId,
+      status,
+      result ? JSON.stringify(result) : null,
+      error_message,
+      token_usage ? JSON.stringify(token_usage) : null,
+    ];
+    let completeWhere = `id = $1 AND status = 'running'`;
+
+    if (CODER_FACTORY_RUNTIME_ROLES.has(actor_role)) {
+      completeVals.push(actor_role);
+      completeWhere += ` AND role = $${completeVals.length}`;
+    }
+
     const q = await pool.query(
       `UPDATE agent_runs
        SET status = $2,
@@ -3205,16 +3331,10 @@ app.post("/runtime/runs/:id/complete", async (req, res) => {
            error_message = $4,
            token_usage = $5::jsonb,
            finished_at = now()
-       WHERE id = $1 AND status = 'running'
+       WHERE ${completeWhere}
        RETURNING id, trigger_id, role, status, attempt_number, correlation_id, run_contract,
                  error_message, started_at, finished_at`,
-      [
-        runId,
-        status,
-        result ? JSON.stringify(result) : null,
-        error_message,
-        token_usage ? JSON.stringify(token_usage) : null,
-      ]
+      completeVals
     );
 
     if (q.rowCount === 0) {
@@ -3358,4 +3478,3 @@ async function shutdownControlApi(signal) {
 
 process.on("SIGTERM", () => { void shutdownControlApi("SIGTERM"); });
 process.on("SIGINT", () => { void shutdownControlApi("SIGINT"); });
-

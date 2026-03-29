@@ -1356,3 +1356,27 @@ P2 items: pending
 ### Review ask
 1. P1 focus: confirm the new role-run block no longer renders task-derived stage data through `innerHTML`.
 2. P1 focus: confirm the JSONB index should be handled as the next migration rather than bundled into this XSS fix.
+
+## H-2026-03-28-19
+
+### Changes
+1. Added a real worker-facing bridge for coder roles:
+   - `POST /runtime/runs/claim-next`
+2. Added a new migration [016_coder_factory_roles.sql](D:/KiberOne/stemford-ai-review/app/control-api/migrations/016_coder_factory_roles.sql) so `executor`, `reviewer`, and `deployer` now exist as formal roles in the database.
+3. Extended tool-access policy in [server.js](D:/KiberOne/stemford-ai-review/app/control-api/server.js):
+   - `executor / reviewer / deployer` now have `runtime.claim`, `runtime.complete`, and `runtime.read`
+4. Tightened run completion so a coder role can complete only its own running role-run, not an arbitrary run by id.
+
+### Checks
+1. `node --check app/control-api/server.js` passes.
+2. Manual diff review confirms `claim-next` uses `FOR UPDATE SKIP LOCKED`, so concurrent workers cannot grab the same pending run.
+3. Manual review confirms `runtime/runs/:id/complete` now scopes coder-role completion to the same role.
+
+### Open risks
+1. This is still the worker bridge, not the full runtime dispatcher: nothing automatically polls `claim-next` yet.
+2. VPS has not received migration `016_coder_factory_roles.sql` in this pass yet.
+3. Task-scoped active-run JSONB lookup index is still pending as a separate hardening step.
+
+### Review ask
+1. P1 focus: confirm the first worker-facing bridge shape is right: `task -> pending role-run -> role claims next run`.
+2. P1 focus: confirm coder-role completion is now scoped tightly enough to preserve role isolation without blocking orchestrator-level intervention.
