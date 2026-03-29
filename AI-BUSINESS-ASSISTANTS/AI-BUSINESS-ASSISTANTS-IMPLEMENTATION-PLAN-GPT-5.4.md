@@ -27,7 +27,7 @@ Do not build a "crowd of chatting agents".
 
 Build:
 
-1. one owner-facing orchestrator
+1. one orchestrator for complex multi-role work
 2. several narrow role workers
 3. structured memory layers
 4. handoff through artifacts and inbox-style messages
@@ -35,10 +35,11 @@ Build:
 
 This means:
 
-1. the orchestrator is the only agent that sees the broad picture
+1. the orchestrator sees the broad picture when a task spans multiple roles
 2. every worker receives a compact task bundle
 3. workers do not share a giant common context
-4. long-running autonomy lives in the scheduler, not in endless chats
+4. asynchronous mailbox-style handoff is preferred over real-time inter-agent chat
+5. long-running autonomy lives in the scheduler, not in endless chats
 
 ## 3. Runtime Architecture
 
@@ -84,11 +85,17 @@ Start with six roles only.
 
 Responsibilities:
 
-1. receive founder requests
+1. receive complex founder requests
 2. route work
 3. collect role outputs
 4. ask for approvals when needed
 5. return final summaries
+
+Important operating rule:
+
+1. the orchestrator is not required for every single interaction
+2. simple one-role requests may go directly to `assistant`, `researcher`, `methodist`, or `finance_analyst`
+3. the orchestrator becomes the default path for multi-role or ambiguous work
 
 ### 4.2 assistant
 
@@ -107,6 +114,7 @@ Responsibilities:
 2. monitor markets and competitors
 3. collect operating signals
 4. produce research summaries with sources
+5. run scheduled competitor-watch style monitoring when needed
 
 ### 4.4 methodist
 
@@ -292,6 +300,7 @@ CREATE TABLE memories (
   source TEXT,
   confidence NUMERIC(4,3),
   tags JSONB DEFAULT '[]'::jsonb,
+  expires_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ```
@@ -321,6 +330,7 @@ CREATE TABLE decisions (
   decision TEXT NOT NULL,
   reasoning TEXT,
   made_by TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
   created_at TIMESTAMPTZ DEFAULT now()
 );
 ```
@@ -389,23 +399,25 @@ Important rule:
 
 1. the worker wrapper calls retrieval automatically
 2. roles should not be trusted to remember to fetch context manually
+3. roles may read decisions, but decision writes remain founder-controlled or explicitly founder-authorized
 
 ## 9. Execution Pattern
 
 ### 9.1 Founder request flow
 
 1. founder writes in Telegram
-2. orchestrator classifies the request
-3. orchestrator decides whether it is:
+2. if the founder directly addresses a role for a simple one-role task, the system routes straight to that role
+3. otherwise the orchestrator classifies the request
+4. the orchestrator decides whether it is:
    - direct answer
    - one-role task
    - multi-role task
-4. system creates a thread and run record
-5. relevant memory bundle is assembled
-6. the selected role runs
-7. artifacts are stored
-8. if needed, follow-up runs can be assigned to assistant, researcher, methodist, or finance_analyst
-9. orchestrator replies to founder
+5. system creates a thread and run record
+6. relevant memory bundle is assembled
+7. the selected role runs
+8. artifacts are stored
+9. if needed, follow-up runs can be assigned to assistant, researcher, methodist, or finance_analyst
+10. the orchestrator replies to the founder when orchestration was involved
 
 ### 9.2 Inter-agent flow
 
@@ -413,8 +425,8 @@ Roles do not talk in a free-for-all chat.
 
 They communicate through:
 
-1. inbox messages
-2. artifacts
+1. inbox messages for short async notes and handoff signals
+2. artifacts for reusable structured outputs
 3. approved decisions
 
 Example:
@@ -514,7 +526,7 @@ These are non-negotiable.
 3. workers see only the minimum relevant memory bundle
 4. messages require `thread_id`
 5. artifacts require `task_id`
-6. decisions are founder-approved facts
+6. decisions are founder-approved facts and are read-only for normal role execution
 7. no shared global free-form role chat
 8. no unlimited carry-over session context
 
@@ -522,15 +534,13 @@ These are non-negotiable.
 
 Keep the founder interface simple.
 
-The founder should not manage multiple agents manually.
-
 Telegram remains the primary interface.
 
 The founder experience should be:
 
-1. ask Jarvis
-2. Jarvis routes internally
-3. the right assistant works
+1. for simple work, address the role directly
+2. for complex work, ask the orchestrator
+3. the right assistant works with compact context
 4. the result comes back in a clean format
 
 Optional later:
@@ -602,7 +612,7 @@ Therefore:
 
 The assistant department is considered working when:
 
-1. the founder talks only to Jarvis / orchestrator
+1. the founder can either use direct role calls for simple work or the orchestrator for complex work
 2. at least three role workers operate reliably
 3. daily and weekly scheduled outputs arrive automatically
 4. memory survives across sessions
