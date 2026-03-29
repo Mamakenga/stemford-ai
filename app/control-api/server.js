@@ -3287,6 +3287,7 @@ app.post("/runtime/runs/claim-next", async (req, res) => {
     client.release();
   }
 });
+
 // POST /runtime/runs/:id/complete — mark run as success/error/timeout
 app.post("/runtime/runs/:id/complete", async (req, res) => {
   const runId = req.params.id;
